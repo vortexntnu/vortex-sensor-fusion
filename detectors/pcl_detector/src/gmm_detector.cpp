@@ -1,4 +1,4 @@
-#include "pcl_detector/detectors/GMMDetector.hpp"
+#include "pcl_detector/detectors/gmm_detector.hpp"
 
 
 namespace pcl_detector {

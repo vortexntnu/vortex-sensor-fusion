@@ -22,10 +22,31 @@ pcl::PointCloud<pcl::PointXYZ> OPTICSDetector::get_detections(const pcl::PointCl
         }
     }
 
+    std::vector<pcl::PointCloud<pcl::PointXYZ>> clusters;
+
     for (size_t i = 0; i < points.size(); ++i) {
         if (reachability_distance[i] <= eps_) {
-            detections.push_back(points[i]);
+            int cluster_id = predecessor[i];
+            if (cluster_id == -1) {
+                continue;
+            }
+
+            while (clusters.size() <= static_cast<size_t>(cluster_id)) {
+                clusters.emplace_back();
+            }
+
+            clusters[cluster_id].push_back(points[i]);
         }
+    }
+
+    for (const auto& cluster : clusters) {
+        if (cluster.empty()) {
+            continue;
+        }
+
+        pcl::PointXYZ centroid;
+        pcl::computeCentroid(cluster, centroid);
+        detections.push_back(centroid);
     }
 
     return detections;
