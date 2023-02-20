@@ -1,4 +1,4 @@
-#include <pcl_detector/pcl_detector.h>
+#include "pcl_detector/pcl_detector.hpp"
 
 #include <pcl/common/distances.h>
 #include <pcl/kdtree/kdtree_flann.h>
