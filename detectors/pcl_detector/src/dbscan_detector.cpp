@@ -1,7 +1,5 @@
 #include "pcl_detector/detectors/dbscan_detector.hpp"
 
-
-
 namespace pcl_detector {
 
 pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
