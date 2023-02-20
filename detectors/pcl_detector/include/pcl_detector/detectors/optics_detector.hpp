@@ -3,11 +3,13 @@
 #include <pcl/common/distances.h>
 #include <pcl/kdtree/kdtree_flann.h>
 
+#include <numeric>
+
 namespace pcl_detector {
 
-class OpticsDetector : public IPclDetector {
+class OPTICSDetector : public IPclDetector {
 public:
-    OpticsDetector(double eps, int min_pts) : eps_(eps), min_pts_(min_pts) {}
+    OPTICSDetector(double eps, int min_pts) : eps_(eps), min_pts_(min_pts) {}
 
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 private:
