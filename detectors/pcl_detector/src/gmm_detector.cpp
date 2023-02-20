@@ -31,7 +31,13 @@ pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud
 
     // Compute GMM clusters
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_points(new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::copyPointCloud(points, *colored_points);
+    for (const auto& point : points) {
+        pcl::PointXYZRGB colored_point;
+        colored_point.x = point.x;
+        colored_point.y = point.y;
+        colored_point.z = point.z;
+        colored_points->push_back(colored_point);
+    }
 
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> ec;
@@ -50,61 +56,49 @@ pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud
         }
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr cluster_points(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::copyPointCloud(*colored_points, indices.indices, *cluster _points);
- 
+        for (const auto& index : indices.indices) {
+            const auto& point = points[index];
+            cluster_points->push_back(point);
+        }
+
         // Compute GMM for the cluster
-        pcl::GaussianMixtureModel<pcl::PointXYZ> gmm(num_clusters_);
-        gmm.setInputCloud(cluster_points);
-        gmm.setMaxIterations(max_iterations_);
-        gmm.setCovarianceType(pcl::GaussianMixtureModel<pcl::PointXYZ>::COVARIANCE_DIAGONAL);
-        gmm.compute();
+        Eigen::MatrixXf data(cluster_points->size(), 3);
+        for (size_t i = 0; i < cluster_points->size(); ++i) {
+            const auto& point = (*cluster_points)[i];
+            data(i, 0) = point.x;
+            data(i, 1) = point.y;
+            data(i, 2) = point.z;
+        }
+
+        Eigen::Vector3f mean = data.colwise().mean();
+        Eigen::Matrix3f cov = (data.rowwise() - mean.transpose()).transpose() * (data.rowwise() - mean.transpose());
+        cov /= cluster_points->size() - 1;
+
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> solver(cov);
+        Eigen::Vector3f eigenvalues = solver.eigenvalues();
+        Eigen::Matrix3f eigenvectors = solver.eigenvectors();
 
         // Get the GMM centroids
         std::vector<pcl::PointXYZ> centroids(num_clusters_);
         for (int i = 0; i < num_clusters_; ++i) {
-            centroids[i] = gmm.getCentroid(i);
+            Eigen::Vector3f direction = eigenvectors.col(i);
+            pcl::PointXYZ centroid(mean(0), mean(1), mean(2));
+            for (float distance = 0.0; distance < 2.0 * eps_; distance += eps_ / 5.0) {
+                centroid.x += direction(0) * distance;
+                centroid.y += direction(1) * distance;
+                centroid.z += direction(2) * distance;
+                centroids[i] = centroid;
+            }
         }
 
         // Add the centroids to the detections
         for (const auto& centroid : centroids) {
             detections.push_back(centroid);
         }
-
-        // Store the individual clusters
-        for (const auto& index : indices.indices) {
-            pcl::PointXYZ point = points[index];
-            double distance = std::numeric_limits<double>::infinity();
-            int nearest_cluster = -1;
-            for (size_t i = 0; i < centroids.size(); ++i) {
-                double d = pcl::euclideanDistance(point, centroids[i]);
-                if (d < distance) {
-                    distance = d;
-                    nearest_cluster = i;
-                }
-            }
-            if (nearest_cluster >= 0) {
-                while (nearest_cluster >= clusters.size()) {
-                    clusters.emplace_back();
-                }
-                clusters[nearest_cluster].push_back(point);
-            }
-        }
-    }
-
-    // Output the individual clusters
-    std::vector<pcl::PointCloud<pcl::PointXYZ>> output_clusters;
-    for (const auto& cluster : clusters) {
-        if (cluster.empty()) {
-            continue;
-        }
-        output_clusters.emplace_back();
-        output_clusters.back().reserve(cluster.size());
-        for (const auto& point : cluster) {
-            output_clusters.back().push_back(point);
-        }
     }
 
     return detections;
+
 }
 
 } // namespace pcl_detector
