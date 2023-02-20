@@ -1,7 +1,5 @@
 #include "pcl_detector/detectors/optics_detector.hpp"
 
-
-
 namespace pcl_detector {
 
 
