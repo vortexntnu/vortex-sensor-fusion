@@ -1,131 +1,93 @@
-#include "pcl_detector/detectors/gmm_detector.hpp"
+#include "pcl_detector/detectors/GMMDetector.hpp"
+
 
 namespace pcl_detector {
 
+GMMDetector::GMMDetector(int num_clusters, int max_iterations)
+    : num_clusters_(num_clusters), max_iterations_(max_iterations) {}
 
 pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
-    // Create a search tree for fast nearest neighbor searches
-    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
-    tree->setInputCloud(points.makeShared());
+    // Compute surface normals
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> normal_estimator;
+    normal_estimator.setInputCloud(points.makeShared());
+    normal_estimator.setRadiusSearch(0.03);
+    normal_estimator.compute(*normals);
 
-    // Initialize the GMM parameters
-    int num_points = points.size();
-    int num_dims = 3;
-    int num_components = num_gaussians_;
-    int max_iterations = max_iterations_;
-    double convergence_threshold = convergence_threshold_;
-    
-    std::vector<Eigen::Vector3f> means(num_components);
-    std::vector<Eigen::Matrix3f> covariances(num_components);
-    std::vector<double> priors(num_components, 1.0 / num_components);
+    // Compute smoothed surface normals
+    pcl::PointCloud<pcl::PointXYZ>::Ptr smoothed_points(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+    sor.setInputCloud(points.makeShared());
+    sor.setMeanK(50);
+    sor.setStddevMulThresh(1.0);
+    sor.filter(*smoothed_points);
 
-    // Initialize the means to random points in the input cloud
-    for (int i = 0; i < num_components; i++) {
-        int idx = rand() % num_points;
-        means[i] = points[idx].getVector3fMap();
-    }
+    pcl::PointCloud<pcl::Normal>::Ptr smoothed_normals(new pcl::PointCloud<pcl::Normal>);
+    pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> smoothed_normal_estimator;
+    smoothed_normal_estimator.setInputCloud(smoothed_points);
+    smoothed_normal_estimator.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr(new pcl::search::KdTree<pcl::PointXYZ>));
+    smoothed_normal_estimator.setRadiusSearch(0.05);
+    smoothed_normal_estimator.compute(*smoothed_normals);
 
-    // Initialize the covariances to the identity matrix
-    for (int i = 0; i < num_components; i++) {
-        covariances[i] = Eigen::Matrix3f::Identity();
-    }
+    // Compute GMM clusters
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_points(new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::copyPointCloud(points, *colored_points);
 
-    // Run the GMM algorithm to estimate the means, covariances, and priors
-    for (int iter = 0; iter < max_iterations; iter++) {
-        // E-step: Compute the responsibilities for each component and point
-        std::vector<std::vector<double>> responsibilities(num_points, std::vector<double>(num_components));
-        for (int i = 0; i < num_points; i++) {
-            for (int j = 0; j < num_components; j++) {
-                Eigen::Vector3f diff = points[i].getVector3fMap() - means[j];
-                Eigen::Matrix3f cov_inv = covariances[j].inverse();
-                double exponent = -0.5 * diff.transpose() * cov_inv * diff;
-                double denominator = pow(2 * M_PI, num_dims / 2.0) * sqrt(covariances[j].determinant());
-                responsibilities[i][j] = priors[j] * exp(exponent) / denominator;
-            }
-            double sum_responsibilities = std::accumulate(responsibilities[i].begin(), responsibilities[i].end(), 0.0);
-            for (int j = 0; j < num_components; j++) {
-                responsibilities[i][j] /= sum_responsibilities;
-            }
-        }
+    pcl::RegionGrowing<pcl::PointXYZ, pcl::Normal> reg;
+    reg.setInputCloud(points.makeShared());
+    reg.setInputNormals(normals);
+    reg.setSmoothModeFlag(true);
+    reg.setCurvatureTestFlag(true);
+    reg.setCurvatureThreshold(0.1);
+    reg.setSmoothnessThreshold(2.0 / 180.0 * M_PI);
+    reg.setResidualThreshold(0.05);
+    reg.setNumberOfNeighbours(10);
+    reg.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr(new pcl::search::KdTree<pcl::PointXYZ>));
+    reg.extract(*colored_points);
 
-        // M-step: Update the means, covariances, and priors based on the responsibilities
-        std::vector<Eigen::Vector3f> new_means(num_components);
-        std::vector<Eigen::Matrix3f> new_covariances(num_components);
-        std::vector<double> new_priors(num_components);
-        for (int j = 0; j < num_components; j++) {
-            double sum_responsibilities = 0.0;
-            Eigen::Vector3f sum_points = Eigen::Vector3f::Zero();
-            Eigen::Matrix3f sum_covariances = Eigen::Matrix3f::Zero();
-            for (int i = 0; i < num_points; i++) {
-                sum_points += responsibilities[i][j] * points[i].getVector3fMap();
-            }
-            new_means[j] = sum_points / sum_responsibilities;
+    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTreepcl::PointXYZRGB);
+    kdtree->setInputCloud(colored_points);
 
-            for (int i = 0; i < num_points; i++) {
-                Eigen::Vector3f diff = points[i].getVector3fMap() - new_means[j];
-                sum_covariances += responsibilities[i][j] * diff * diff.transpose();
-            }
-            new_covariances[j] = sum_covariances / sum_responsibilities;
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> ec;
+    ec.setClusterTolerance(0.05);
+    ec.setMinClusterSize(100);
+    ec.setMaxClusterSize(25000);
+    ec.setSearchMethod(kdtree);
+    ec.setInputCloud(colored_points);
+    ec.extract(cluster_indices);
 
-            new_priors[j] = sum_responsibilities / num_points;
-        }
-
-        // Check for convergence of the means and covariances
-        double mean_change = 0.0;
-        double covar_change = 0.0;
-        for (int j = 0; j < num_components; j++) {
-            mean_change += (new_means[j] - means[j]).norm();
-            covar_change += (new_covariances[j] - covariances[j]).norm();
-        }
-        if (mean_change < convergence_threshold && covar_change < convergence_threshold) {
-            break;
-        }
-
-        // Update the parameters for the next iteration
-        means = new_means;
-        covariances = new_covariances;
-        priors = new_priors;
-    }
-
-    // Assign each point to the cluster with the highest probability
-    std::vector<int> cluster_labels(num_points, -1);
-    for (int i = 0; i < num_points; i++) {
-        int max_label = 0;
-        double max_prob = 0.0;
-        for (int j = 0; j < num_components; j++) {
-            Eigen::Vector3f diff = points[i].getVector3fMap() - means[j];
-            Eigen::Matrix3f cov_inv = covariances[j].inverse();
-            double exponent = -0.5 * diff.transpose() * cov_inv * diff;
-            double denominator = pow(2 * M_PI, num_dims / 2.0) * sqrt(covariances[j].determinant());
-            double prob = priors[j] * exp(exponent) / denominator;
-            if (prob > max_prob) {
-                max_prob = prob;
-                max_label = j;
-            }
-        }
-        cluster_labels[i] = max_label;
-    }
-
-    // Extract the centroids of the clusters as the detections
     pcl::PointCloud<pcl::PointXYZ> detections;
-    pcl::EuclideanClusterExtraction<pcl::PointXYZ> cluster_extraction;
-    cluster_extraction.setClusterTolerance(cluster_tolerance_);
-    cluster_extraction.setMinClusterSize(min_cluster_size_);
-    cluster_extraction.setMaxClusterSize(points.size());
-    cluster_extraction.setSearchMethod(tree);
-    cluster_extraction.setInputCloud(points.makeShared());
-    cluster_extraction.extract(cluster_labels, cluster_indices_);
+    detections.reserve(cluster_indices.size() * num_clusters_);
 
-    for (const auto& indices : cluster_indices_) {
-        Eigen::Vector3f centroid = Eigen::Vector3f::Zero();
-        for (const auto& index : indices) {
-            centroid += points[index].getVector3fMap();
+    for (const auto& indices : cluster_indices) {
+        if (indices.indices.size() < num_clusters_) {
+            continue;
         }
-        centroid /= indices.size();
-        detections.push_back(pcl::PointXYZ(centroid[0], centroid[1], centroid[2]));
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cluster_points(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::copyPointCloud(*colored_points, indices.indices, *cluster_points);
+
+        // Compute GMM for the cluster
+        pcl::GaussianMixtureModel<pcl::PointXYZ> gmm(num_clusters_);
+        gmm.setInputCloud(cluster_points);
+        gmm.setMaxIterations(max_iterations_);
+        gmm.setCovarianceType(pcl::GaussianMixtureModel<pcl::PointXYZ>::COVARIANCE_DIAGONAL);
+        gmm.compute();
+
+        // Get the GMM centroids
+        std::vector<pcl::PointXYZ> centroids(num_clusters_);
+        for (int i = 0; i < num_clusters_; ++i) {
+            centroids[i] = gmm.getCentroid(i);
+        }
+
+        // Add the centroids to the detections
+        for (const auto& centroid : centroids) {
+            detections.push_back(centroid);
+        }
     }
 
     return detections;
+}
 
-
-}; // namespace pcl_detector
+} // namespace pcl_detector
