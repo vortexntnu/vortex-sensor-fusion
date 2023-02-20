@@ -19,10 +19,19 @@ pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCl
     ec.setInputCloud(points.makeShared());
     ec.extract(cluster_indices);
 
-    for (auto& indices : cluster_indices) {
-        for (auto& index : indices.indices) {
-            detections.push_back(points[index]);
+    for (const auto& indices : cluster_indices) {
+        pcl::PointXYZ centroid;
+        centroid.getArray3fMap() = Eigen::Array3f::Zero();
+        for (const auto& index : indices.indices) {
+            const auto& point = points[index];
+            centroid.x += point.x;
+            centroid.y += point.y;
+            centroid.z += point.z;
         }
+        centroid.x /= indices.indices.size();
+        centroid.y /= indices.indices.size();
+        centroid.z /= indices.indices.size();
+        detections.push_back(centroid);
     }
 
     return detections;
