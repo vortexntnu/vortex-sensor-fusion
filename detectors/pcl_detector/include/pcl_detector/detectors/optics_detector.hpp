@@ -18,12 +18,12 @@ void expand_cluster(const pcl::PointCloud<pcl::PointXYZ>& points,
                     int point_idx,
                     std::vector<int>& predecessor,
                     std::vector<bool>& visited,
-                    std::vector<double>& reachability_distance);
+                    std::vector<float>& reachability_distance);
 
     double eps_;
     int min_pts_;
 
-}
+};
 
 }; // namespace pcl_detector
 
