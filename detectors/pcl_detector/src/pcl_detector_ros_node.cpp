@@ -8,8 +8,8 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "pcl_detector");
     ros::NodeHandle nh;
 
-    double eps = 1.0; // Meters
-    int min_points = 10;
+    double eps = 0.1; // Meters
+    int min_points = 100;
     float leaf_size = 0.05; // Meters
 
     std::shared_ptr<IPclDetector> detector = std::make_shared<DBSCANDetector>(eps, min_points);
