@@ -33,27 +33,11 @@ pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr colored_points(new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::copyPointCloud(points, *colored_points);
 
-    pcl::RegionGrowing<pcl::PointXYZ, pcl::Normal> reg;
-    reg.setInputCloud(points.makeShared());
-    reg.setInputNormals(normals);
-    reg.setSmoothModeFlag(true);
-    reg.setCurvatureTestFlag(true);
-    reg.setCurvatureThreshold(0.1);
-    reg.setSmoothnessThreshold(2.0 / 180.0 * M_PI);
-    reg.setResidualThreshold(0.05);
-    reg.setNumberOfNeighbours(10);
-    reg.setSearchMethod(pcl::search::KdTree<pcl::PointXYZ>::Ptr(new pcl::search::KdTree<pcl::PointXYZ>));
-    reg.extract(*colored_points);
-
-    pcl::search::KdTree<pcl::PointXYZRGB>::Ptr kdtree(new pcl::search::KdTreepcl::PointXYZRGB);
-    kdtree->setInputCloud(colored_points);
-
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> ec;
     ec.setClusterTolerance(0.05);
     ec.setMinClusterSize(100);
     ec.setMaxClusterSize(25000);
-    ec.setSearchMethod(kdtree);
     ec.setInputCloud(colored_points);
     ec.extract(cluster_indices);
 
@@ -66,8 +50,8 @@ pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud
         }
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr cluster_points(new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::copyPointCloud(*colored_points, indices.indices, *cluster_points);
-
+        pcl::copyPointCloud(*colored_points, indices.indices, *cluster _points);
+ 
         // Compute GMM for the cluster
         pcl::GaussianMixtureModel<pcl::PointXYZ> gmm(num_clusters_);
         gmm.setInputCloud(cluster_points);
@@ -84,6 +68,39 @@ pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud
         // Add the centroids to the detections
         for (const auto& centroid : centroids) {
             detections.push_back(centroid);
+        }
+
+        // Store the individual clusters
+        for (const auto& index : indices.indices) {
+            pcl::PointXYZ point = points[index];
+            double distance = std::numeric_limits<double>::infinity();
+            int nearest_cluster = -1;
+            for (size_t i = 0; i < centroids.size(); ++i) {
+                double d = pcl::euclideanDistance(point, centroids[i]);
+                if (d < distance) {
+                    distance = d;
+                    nearest_cluster = i;
+                }
+            }
+            if (nearest_cluster >= 0) {
+                while (nearest_cluster >= clusters.size()) {
+                    clusters.emplace_back();
+                }
+                clusters[nearest_cluster].push_back(point);
+            }
+        }
+    }
+
+    // Output the individual clusters
+    std::vector<pcl::PointCloud<pcl::PointXYZ>> output_clusters;
+    for (const auto& cluster : clusters) {
+        if (cluster.empty()) {
+            continue;
+        }
+        output_clusters.emplace_back();
+        output_clusters.back().reserve(cluster.size());
+        for (const auto& point : cluster) {
+            output_clusters.back().push_back(point);
         }
     }
 
