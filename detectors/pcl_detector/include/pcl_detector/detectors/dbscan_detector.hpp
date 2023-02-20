@@ -8,7 +8,7 @@
 
 #include <pcl/segmentation/extract_clusters.h>
 
-#include "pcl_detector.hpp"
+#include "pcl_detector/pcl_detector.hpp"
 
 namespace pcl_detector {
 
