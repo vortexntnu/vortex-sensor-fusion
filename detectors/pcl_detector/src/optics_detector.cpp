@@ -5,7 +5,7 @@
 namespace pcl_detector {
 
 
-pcl::PointCloud<pcl::PointXYZ> OPTICSDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override {
+pcl::PointCloud<pcl::PointXYZ> OPTICSDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
     pcl::PointCloud<pcl::PointXYZ> detections;
 
     // Create KD-Tree for efficient neighborhood search
@@ -44,8 +44,15 @@ pcl::PointCloud<pcl::PointXYZ> OPTICSDetector::get_detections(const pcl::PointCl
             continue;
         }
 
-        pcl::PointXYZ centroid;
-        pcl::computeCentroid(cluster, centroid);
+        pcl::PointXYZ centroid(0.0, 0.0, 0.0);
+        for (const auto& point : cluster) {
+            centroid.x += point.x;
+            centroid.y += point.y;
+            centroid.z += point.z;
+        }
+        centroid.x /= cluster.size();
+        centroid.y /= cluster.size();
+        centroid.z /= cluster.size();
         detections.push_back(centroid);
     }
 
