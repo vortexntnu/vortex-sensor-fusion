@@ -3,8 +3,8 @@
 
 namespace pcl_detector {
 
-GMMDetector::GMMDetector(int num_clusters, int max_iterations)
-    : num_clusters_(num_clusters), max_iterations_(max_iterations) {}
+GMMDetector::GMMDetector(int num_clusters, int max_iterations, double step_size)
+    : num_clusters_(num_clusters), max_iterations_(max_iterations), step_size_(step_size) {}
 
 pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
     // Compute surface normals
@@ -83,7 +83,7 @@ pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud
         for (int i = 0; i < num_clusters_; ++i) {
             Eigen::Vector3f direction = eigenvectors.col(i);
             pcl::PointXYZ centroid(mean(0), mean(1), mean(2));
-            for (float distance = 0.0; distance < 2.0 * eps_; distance += eps_ / 5.0) {
+            for (float distance = 0.0; distance < 2.0 * step_size_; distance += step_size_ / 5.0) {
                 centroid.x += direction(0) * distance;
                 centroid.y += direction(1) * distance;
                 centroid.z += direction(2) * distance;
