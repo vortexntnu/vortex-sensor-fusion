@@ -30,6 +30,7 @@ add_executable(${BINARY_NAME}
     src/pcl_detector_ros_node.cpp
     src/pcl_detector_ros.cpp
     src/euclidean_clustering.cpp
+    src/dbscan_detector.cpp
 )
 
 target_link_libraries(${BINARY_NAME}
