@@ -9,12 +9,11 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/statistical_outlier_removal.h>
-#include <pcl/segmentation/growing_region.h>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
-#include "pcl_detector/pcl_detector.h"
+#include "pcl_detector/pcl_detector.hpp"
 
 namespace pcl_detector {
 
