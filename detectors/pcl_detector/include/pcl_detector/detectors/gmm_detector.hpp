@@ -19,13 +19,14 @@ namespace pcl_detector {
 
 class GMMDetector : public IPclDetector {
 public:
-    GMMDetector(int num_clusters, int max_iterations);
+    GMMDetector(int num_clusters, int max_iterations, double step_size_);
 
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 
 private:
     int num_clusters_;
     int max_iterations_;
+    int step_size_;
 };
 
 } // namespace pcl_detector
