@@ -11,15 +11,13 @@
 class EuclideanClusteringDetector : public pcl_detector::IPclDetector {
 
 public:
-    EuclideanClusteringDetector(double cluster_tolerance, int min_cluster_size,
-        int max_cluster_size, double range);
+    EuclideanClusteringDetector(double cluster_tolerance, int min_cluster_size, double range);
 
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 
 private:
     double m_cluster_tolerance;
     int m_min_cluster_size;
-    int m_max_cluster_size;
     double m_range;
 };
 

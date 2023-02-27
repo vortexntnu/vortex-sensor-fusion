@@ -37,6 +37,10 @@ private:
     double eps_; /**< The maximum distance between two points for them to be considered as part of the same cluster. */
     int min_points_; /**< The minimum number of points for a cluster to be considered valid. */
 
+    void expand_cluster(const pcl::PointXYZ& point, int cluster_id, const std::vector<int>& neighbors,
+                        std::vector<int>& labels, pcl::PointCloud<pcl::PointXYZ>& detections,
+                        const pcl::search::Search<pcl::PointXYZ>::Ptr& tree, float eps, int min_points);
+
 };
 
 }; // namespace pcl_detector

@@ -1,3 +1,4 @@
+#include "pcl_detector/detectors/euclidean_clustering.hpp"
 #include "pcl_detector/detectors/dbscan_detector.hpp"
 #include "pcl_detector/detectors/optics_detector.hpp"
 #include "pcl_detector/detectors/gmm_detector.hpp"
@@ -31,6 +32,11 @@ int main(int argc, char** argv) {
         int max_iterations = 100;
         double convergence_threshold = 1e-4;
         detector = std::make_shared<GMMDetector>(num_gaussians, max_iterations, convergence_threshold);
+    } else if (detector_type == "euclidean") {
+        double eps = 1.0; // Meters
+        int min_points = 10;
+        double range = 100.0; // Meters
+        detector = std::make_shared<EuclideanClusteringDetector>(eps, min_points, range);
     } else {
         ROS_ERROR("Invalid detector type: %s", detector_type.c_str());
         return 1;
