@@ -1,16 +1,13 @@
 #include "pcl_detector/detectors/euclidean_clustering.hpp"
 
 EuclideanClusteringDetector::EuclideanClusteringDetector(
-    double cluster_tolerance, int min_cluster_size, double range)
+    double cluster_tolerance, int min_cluster_size)
     : m_cluster_tolerance{ cluster_tolerance }
     , m_min_cluster_size{ min_cluster_size }
-    , m_range{ range }
 {
 }
 
-pcl::PointCloud<pcl::PointXYZ> EuclideanClusteringDetector::get_detections(
-    const pcl::PointCloud<pcl::PointXYZ>& points)
-{
+pcl::PointCloud<pcl::PointXYZ> EuclideanClusteringDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
     pcl::PointCloud<pcl::PointXYZ> detections;
 
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
@@ -18,8 +15,8 @@ pcl::PointCloud<pcl::PointXYZ> EuclideanClusteringDetector::get_detections(
 
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-    ec.setClusterTolerance(eps_);
-    ec.setMinClusterSize(min_points_);
+    ec.setClusterTolerance(m_cluster_tolerance);
+    ec.setMinClusterSize(m_min_cluster_size);
     ec.setMaxClusterSize(std::numeric_limits<int>::max());
     ec.setSearchMethod(tree);
     ec.setInputCloud(points.makeShared());
@@ -37,10 +34,7 @@ pcl::PointCloud<pcl::PointXYZ> EuclideanClusteringDetector::get_detections(
         centroid.x /= indices.indices.size();
         centroid.y /= indices.indices.size();
         centroid.z /= indices.indices.size();
-
-        if (abs(x) < m_range && abs(y) < m_range && abs(z) < m_range) {
-            detections.push_back(pcl::PointXYZ{ x, y, z });
-        }
+        detections.push_back(centroid);
     }
 
     return detections;

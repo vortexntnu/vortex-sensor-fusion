@@ -54,13 +54,13 @@ void DBSCANDetector::expand_cluster(const pcl::PointXYZ& point, int cluster_id, 
     for (int j = 0; j < neighbors.size(); j++) {
         if (labels[neighbors[j]] == noise_label) { // assign to cluster if neighbor was previously noise
             labels[neighbors[j]] = cluster_id;
-            detections.push_back(points[neighbors[j]]);
+            detections.push_back(point[neighbors[j]]);
         } else if (labels[neighbors[j]] == -1) { // mark as visited and add to neighbor list
             labels[neighbors[j]] = cluster_id;
-            detections.push_back(points[neighbors[j]]);
+            detections.push_back(point[neighbors[j]]);
             std::vector<int> more_neighbors;
             std::vector<float> more_distances;
-            tree->radiusSearch(points[neighbors[j]], eps, more_neighbors, more_distances);
+            tree->radiusSearch(point[neighbors[j]], eps, more_neighbors, more_distances);
             if (more_neighbors.size() >= min_points) { // add new neighbors to neighbor list if they meet min_points requirement
                 neighbors.insert(neighbors.end(), more_neighbors.begin(), more_neighbors.end());
             }
