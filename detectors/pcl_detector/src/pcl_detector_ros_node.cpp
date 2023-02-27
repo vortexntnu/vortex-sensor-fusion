@@ -1,7 +1,7 @@
 #include "pcl_detector/detectors/euclidean_clustering.hpp"
-// #include "pcl_detector/detectors/dbscan_detector.hpp"
-// #include "pcl_detector/detectors/optics_detector.hpp"
-// #include "pcl_detector/detectors/gmm_detector.hpp"
+#include "pcl_detector/detectors/dbscan_detector.hpp"
+#include "pcl_detector/detectors/optics_detector.hpp"
+#include "pcl_detector/detectors/gmm_detector.hpp"
 #include "pcl_detector/pcl_detector_ros.hpp"
 
 using namespace pcl_detector;
@@ -14,25 +14,26 @@ int main(int argc, char** argv) {
     float leaf_size = 0.05; // Meters. Used for downsampling the raw pcl
 
     // Select the detector based on a command-line argument
-    std::string detector_type = "euclidean"; // Default to DBSCAN
+    std::string detector_type = "dbscan"; // Default to DBSCAN
     if (argc >= 2) {
         detector_type = argv[1];
     }
 
-    // if (detector_type == "dbscan") {
-    //     double eps = 0.1; // Meters
-    //     int min_points = 100;
-    //     detector = std::make_shared<DBSCANDetector>(eps, min_points);
-    // } else if (detector_type == "optics") {
-    //     double eps = 0.1; // Meters
-    //     int min_points = 10;
-    //     detector = std::make_shared<OPTICSDetector>(eps, min_points);
-    // } else if (detector_type == "gmm") {
-    //     int num_gaussians = 3;
-    //     int max_iterations = 100;
-    //     double convergence_threshold = 1e-4;
-    //     detector = std::make_shared<GMMDetector>(num_gaussians, max_iterations, convergence_threshold);
-    if (detector_type == "euclidean") {
+    if (detector_type == "dbscan") {
+        double eps = 0.5; // Meters
+        int min_points = 100;
+        detector = std::make_shared<DBSCANDetector>(eps, min_points);
+    } else if (detector_type == "optics") {
+        double eps = 0.1; // Meters
+        int min_points = 2;
+        detector = std::make_shared<OPTICSDetector>(eps, min_points);
+    } else if (detector_type == "gmm") {
+        int num_gaussians = 3;
+        int max_iterations = 100;
+        double convergence_threshold = 1e-4;
+        detector = std::make_shared<GMMDetector>(num_gaussians, max_iterations, convergence_threshold);
+    }
+    else if (detector_type == "euclidean") {
         double eps = 0.1; // Meters
         int min_points = 100;
         detector = std::make_shared<EuclideanClusteringDetector>(eps, min_points);

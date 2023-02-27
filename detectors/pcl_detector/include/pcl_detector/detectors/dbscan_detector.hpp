@@ -8,8 +8,14 @@
 
 #include "pcl_detector/pcl_detector.hpp"
 
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/search/search.h>
+#include <pcl/segmentation/extract_clusters.h>
+#include <pcl/common/centroid.h>
+
 
 namespace pcl_detector {
 

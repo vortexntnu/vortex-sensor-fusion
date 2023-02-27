@@ -1,8 +1,10 @@
 #include "pcl_detector/detectors/dbscan_detector.hpp"
 
+#include <iostream>
+
 namespace pcl_detector {
 
-pcl::PointCloud<pcl::PointXYZ> DBSCAN::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
+pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
     // Create a KD-Tree
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
     tree->setInputCloud(points.makeShared());
@@ -18,7 +20,8 @@ pcl::PointCloud<pcl::PointXYZ> DBSCAN::get_detections(const pcl::PointCloud<pcl:
         }
 
         std::vector<int> neighbors;
-        tree->radiusSearch(i, m_eps, neighbors); // Find neighbors within radius eps
+        std::vector<float> distances;
+        tree->radiusSearch(points[i], m_eps, neighbors, distances); // Find neighbors within radius eps
 
         if (neighbors.size() < m_min_points) {
             labels[i] = 0; // Mark as noise
@@ -38,7 +41,8 @@ pcl::PointCloud<pcl::PointXYZ> DBSCAN::get_detections(const pcl::PointCloud<pcl:
             }
             labels[neighbor] = label; // Add neighbor to current cluster
             std::vector<int> sub_neighbors;
-            tree->radiusSearch(neighbor, m_eps, sub_neighbors);
+            std::vector<float> sub_distances;
+            tree->radiusSearch(points[neighbor], m_eps, sub_neighbors, sub_distances);
             if (sub_neighbors.size() >= m_min_points) {
                 neighbors.insert(neighbors.end(), sub_neighbors.begin(), sub_neighbors.end());
             }
