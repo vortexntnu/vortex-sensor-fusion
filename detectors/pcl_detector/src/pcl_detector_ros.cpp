@@ -11,6 +11,7 @@ PclDetectorRos::PclDetectorRos(
     m_pointcloud_sub = nh.subscribe<sensor_msgs::PointCloud2>("/os_cloud_node/points", 1, &PclDetectorRos::pointCloudCallback, this);
 
     m_centroid_pub = m_nh.advertise<sensor_msgs::PointCloud2>("/pcl_detector/centroids", 1);
+    m_centroid_pose_pub = m_nh.advertise<geometry_msgs::PoseArray>("/lidar/clusters", 1);
     m_downsample_pub = m_nh.advertise<sensor_msgs::PointCloud2>("/pcl_detector/downsampled_input", 1);
 }
 
@@ -48,4 +49,24 @@ void PclDetectorRos::pointCloudCallback(
     centroids_cloud_msg.header.frame_id = cloud_msg->header.frame_id;
     centroids_cloud_msg.header.stamp = ros::Time::now();
     m_centroid_pub.publish(centroids_cloud_msg);
+
+    geometry_msgs::PoseArray centroids_point_msg;
+    centroids_point_msg.header.frame_id = cloud_msg->header.frame_id;
+    centroids_point_msg.header.stamp = ros::Time::now();
+
+    for (auto detection : detections) {
+        geometry_msgs::Pose pose;
+        pose.position.x = detection.x;
+        pose.position.y = detection.y;
+        pose.position.z = detection.z;
+        pose.orientation.x = 0.0;
+        pose.orientation.y = 0.0;
+        pose.orientation.z = 0.0;
+        pose.orientation.w = 1.0;
+        centroids_point_msg.poses.push_back(pose);
+    }
+
+    m_centroid_pose_pub.publish(centroids_point_msg);
+
+
 }

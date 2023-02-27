@@ -4,6 +4,8 @@
 #include <ros/ros.h>
 
 #include <geometry_msgs/PointStamped.h>
+#include <geometry_msgs/Pose.h>
+#include <geometry_msgs/PoseArray.h>
 #include <sensor_msgs/PointCloud2.h>
 
 #include <pcl/PCLPointCloud2.h>
@@ -29,6 +31,7 @@ private:
     ros::NodeHandle m_nh;
     ros::Subscriber m_pointcloud_sub;
     ros::Publisher m_centroid_pub;
+    ros::Publisher m_centroid_pose_pub;
     ros::Publisher m_downsample_pub;
     float m_leaf_size;
 
