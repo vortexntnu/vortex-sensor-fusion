@@ -1,0 +1,11 @@
+<launch>
+    <!--Loads the necesarry parameters to rosparam-->
+    <rosparam file="$(find sonar_mapping_c)/config/config.yaml"/>
+
+    <!--Launch the necesarry nodes to start sonar, onyl necesarry for MANTA-->
+    <!--TODO-->
+    
+    <!--Launch mapping node-->
+    <node pkg="sonar_mapping_c" type="sonar_mapping_c_node" name="sonar_mapping_node" output="screen"/>
+
+</launch>
