@@ -1,3 +1,7 @@
+#ifndef OPTICS_DETECTOR_H
+#define OPTICS_DETECTOR_H
+
+
 #include "pcl_detector/pcl_detector.hpp"
 
 #include <pcl/common/distances.h>
@@ -34,4 +38,4 @@ void expand_cluster(const pcl::PointCloud<pcl::PointXYZ>& points,
 }; // namespace pcl_detector
 
 
-
+#endif // OPTICS_DETECTOR_H

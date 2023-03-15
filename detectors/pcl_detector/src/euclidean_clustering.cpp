@@ -1,5 +1,7 @@
 #include "pcl_detector/detectors/euclidean_clustering.hpp"
 
+namespace pcl_detector {
+
 EuclideanClusteringDetector::EuclideanClusteringDetector(
     double cluster_tolerance, int min_cluster_size)
     : m_cluster_tolerance{ cluster_tolerance }
@@ -39,3 +41,5 @@ pcl::PointCloud<pcl::PointXYZ> EuclideanClusteringDetector::get_detections(const
 
     return detections;
 }
+
+}; // namespace pcl_detector

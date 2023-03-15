@@ -8,6 +8,8 @@
 #include <pcl/point_types.h>
 #include <pcl/segmentation/extract_clusters.h>
 
+namespace pcl_detector {
+
 class EuclideanClusteringDetector : public pcl_detector::IPclDetector {
 
 public:
@@ -19,5 +21,8 @@ private:
     double m_cluster_tolerance;
     int m_min_cluster_size;
 };
+
+}; // namespace pcl_detector
+
 
 #endif // EEUCLIDEAN_CLUSTERING_H
