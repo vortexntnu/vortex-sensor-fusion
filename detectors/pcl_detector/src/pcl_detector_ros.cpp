@@ -3,7 +3,7 @@
 
 std::unique_ptr<pcl_detector::IPclDetector> PclDetectorRos::initialize_detector(std::string detector) {
 
-    std::string detector_name = prefix + "/" + detector;
+    std::string detector_name = m_prefix + "/" + detector;
     std::unique_ptr<pcl_detector::IPclDetector> configured_detector = nullptr;
 
     switch(detector_type[detector]){
@@ -44,7 +44,8 @@ std::unique_ptr<pcl_detector::IPclDetector> PclDetectorRos::initialize_detector(
         }
 
         default: {
-            ROS_FATAL("Invalid pcl detector specified!");             
+            ROS_FATAL("Invalid pcl detector specified! Shutting down...");
+            ros::shutdown();             
         }
     }
 
@@ -54,42 +55,56 @@ std::unique_ptr<pcl_detector::IPclDetector> PclDetectorRos::initialize_detector(
 PclDetectorRos::PclDetectorRos(ros::NodeHandle nh) : m_nh{ nh }
 {
 
-    m_pointcloud_sub = nh.subscribe<sensor_msgs::PointCloud2>("/os_cloud_node/points", 1, &PclDetectorRos::pointCloudCallback, this);
+    m_pointcloud_sub = nh.subscribe<sensor_msgs::PointCloud2>("/os_cloud_node/points", 1, &PclDetectorRos::pointcloud_callback, this);
 
-    m_centroid_pub = m_nh.advertise<sensor_msgs::PointCloud2>(prefix + "/centroids", 1);
+    m_centroid_pub = m_nh.advertise<sensor_msgs::PointCloud2>(m_prefix + "/centroids", 1);
     m_centroid_pose_pub = m_nh.advertise<geometry_msgs::PoseArray>("/lidar/clusters", 1);
-    m_downsample_pub = m_nh.advertise<sensor_msgs::PointCloud2>(prefix + "/downsampled_input", 1);
+    m_downsample_pub = m_nh.advertise<sensor_msgs::PointCloud2>(m_prefix + "/downsampled_input", 1);
 
-    m_leaf_size = get_and_set_rosparam<float>(prefix + "/leaf_size");
+    m_leaf_size = get_and_set_rosparam<float>(m_prefix + "/leaf_size");
 
-    std::string detector = get_and_set_rosparam<std::string>(prefix + "/detector_type");
-    std::string detector_name = prefix + "/" + detector;
+    std::string detector = get_and_set_rosparam<std::string>(m_prefix + "/detector_type");
+    std::string detector_name = m_prefix + "/" + detector;
 
     // Get parameters for said detector type
     m_detector = initialize_detector(detector);
 
-    m_config_server.setCallback(boost::bind(&PclDetectorRos::reconfigureCallback, this, _1, _2));
+    m_config_server.setCallback(boost::bind(&PclDetectorRos::reconfigure_callback, this, _1, _2));
 }
 
+void PclDetectorRos::reconfigure_callback(pcl_detector::PclDetectorConfig &config, uint32_t level) {
 
-void PclDetectorRos::parse_dynamic_reconfigure_parameters() {
-
-}
-
-void PclDetectorRos::reconfigureCallback(pcl_detector::PclDetectorConfig &config, uint32_t level) {
-    if(first_config) {
-        first_config = false;
-        return; // the reconfigure callback is called once by default on launch. We don't want that.
+    if(m_first_config) {
+        m_first_config = false;
+        return; // the reconfigure callback is called once by default on launch. We don't want since that overwrites the yaml params.
     } 
-    ROS_INFO("Dynamic reconfigure for PCL-Detector called!");
 
-    // Set rosparams
+    auto new_detector_type = DetectorType(config.detector_type);
+    std::string new_detector_name = "";
+    for (const auto& entry: detector_type) {
+        if (entry.second == new_detector_type) {
+            new_detector_name = entry.first;
+        } 
+    }
 
-    std::string detector = "dbscan";
+    if (new_detector_name == "") {
+        ROS_FATAL("Invalid detector type configured! Shutting down...");
+        ros::shutdown();
+    }
 
-    m_detector = initialize_detector(detector);
+    m_nh.setParam(m_prefix + "/detector_type", new_detector_name);
+    m_nh.setParam(m_prefix + "/leaf_size", config.leaf_size);
+    m_nh.setParam(m_prefix + "/dbscan/epsilon", config.dbscan_epsilon);
+    m_nh.setParam(m_prefix + "/dbscan/min_points", config.dbscan_min_points);
+    m_nh.setParam(m_prefix + "/euclidean/cluster_tolerance", config.euclidean_cluster_tolerance);
+    m_nh.setParam(m_prefix + "/euclidean/min_points", config.euclidean_min_points);
+    m_nh.setParam(m_prefix + "/gmm/num_clusters", config.gmm_num_clusters);
+    m_nh.setParam(m_prefix + "/gmm/max_iterations", config.gmm_max_iterations);
+    m_nh.setParam(m_prefix + "/gmm/step_size", config.gmm_step_size);
+    m_nh.setParam(m_prefix + "/optics/epsilon", config.optics_epsilon);
+    m_nh.setParam(m_prefix + "/optics/min_points", config.optics_min_points);
 
-
+    m_detector = initialize_detector(new_detector_name);
 }
 
 template<typename T>
@@ -106,7 +121,7 @@ T PclDetectorRos::get_and_set_rosparam(std::string rosparam_name) {
 }
 
 
-void PclDetectorRos::pointCloudCallback(
+void PclDetectorRos::pointcloud_callback(
     const sensor_msgs::PointCloud2::ConstPtr& cloud_msg)
 {
 

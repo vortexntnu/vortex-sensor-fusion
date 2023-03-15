@@ -4,11 +4,11 @@
 
     <rosparam command="load" file="$(find pcl_detector)/params/example_params.yaml"/>
 
-    <!-- <arg name="ip" default="os1-122007000043.local"/>
+    <arg name="ip" default="os1-122007000043.local"/>
 
     <include file="$(find ouster_ros)/ouster.launch">
         <arg name="sensor_hostname" value="$(arg ip)"/>
-    </include> -->
+    </include>
 
     <node pkg="pcl_detector" type="pcl_detector_ros_node" name="pcl_detector_ros_node" output="screen"/>
 

@@ -35,12 +35,7 @@ class PclDetectorRos {
 public:
     PclDetectorRos(ros::NodeHandle nh);
 
-    void spin();
-
 private:
-    void pointCloudCallback(const sensor_msgs::PointCloud2::ConstPtr& cloud_msg);
-    void reconfigureCallback(pcl_detector::PclDetectorConfig &config, uint32_t level);
-
     ros::NodeHandle m_nh;
     ros::Subscriber m_pointcloud_sub;
     ros::Publisher m_centroid_pub;
@@ -48,13 +43,18 @@ private:
     ros::Publisher m_downsample_pub;
     dynamic_reconfigure::Server<pcl_detector::PclDetectorConfig> m_config_server;
 
-    float m_leaf_size;
-    std::string prefix = "/pcl_detector";
-    unsigned int m_seq{ 0 };
-    bool first_config = true;
+    void pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& cloud_msg);
+    void reconfigure_callback(pcl_detector::PclDetectorConfig &config, uint32_t level);
 
     template<typename T>
     T get_and_set_rosparam(std::string rosparam_name);
+
+    float m_leaf_size;
+    std::string m_prefix = "/pcl_detector";
+    unsigned int m_seq{ 0 };
+    bool m_first_config = true;
+
+    std::unique_ptr<pcl_detector::IPclDetector> m_detector;
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         {"dbscan", DetectorType::DBSCAN},
@@ -63,10 +63,7 @@ private:
         {"optics", DetectorType::OPTICS}
     };
 
-    void parse_dynamic_reconfigure_parameters();
     std::unique_ptr<pcl_detector::IPclDetector> initialize_detector(std::string detector);
-
-    std::unique_ptr<pcl_detector::IPclDetector> m_detector;
 };
 
 #endif // PCL_DETECTOR_ROS_H
