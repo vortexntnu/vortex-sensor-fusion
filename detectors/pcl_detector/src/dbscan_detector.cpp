@@ -4,7 +4,8 @@
 
 namespace pcl_detector {
 
-pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
+pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points)
+{
     // Create a KD-Tree
     pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
     tree->setInputCloud(points.makeShared());

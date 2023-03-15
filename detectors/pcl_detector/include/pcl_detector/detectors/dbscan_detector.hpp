@@ -8,21 +8,24 @@
 
 #include "pcl_detector/pcl_detector.hpp"
 
+#include <pcl/common/centroid.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/filters/extract_indices.h>
 #include <pcl/search/search.h>
 #include <pcl/segmentation/extract_clusters.h>
-#include <pcl/common/centroid.h>
-
 
 namespace pcl_detector {
 
 class DBSCANDetector : public IPclDetector {
 
 public:
-    DBSCANDetector(float eps, int min_points) : m_eps(eps), m_min_points(min_points) {}
+    DBSCANDetector(float eps, int min_points)
+        : m_eps(eps)
+        , m_min_points(min_points)
+    {
+    }
 
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 

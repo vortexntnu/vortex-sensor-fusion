@@ -4,11 +4,11 @@
 #include <vector>
 
 #include <pcl/common/distances.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/filters/extract_indices.h>
-#include <pcl/segmentation/extract_clusters.h>
 #include <pcl/features/normal_3d.h>
+#include <pcl/filters/extract_indices.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>

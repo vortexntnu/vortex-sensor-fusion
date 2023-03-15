@@ -1,12 +1,16 @@
 #include "pcl_detector/detectors/gmm_detector.hpp"
 
-
 namespace pcl_detector {
 
 GMMDetector::GMMDetector(int num_clusters, int max_iterations, double step_size)
-    : num_clusters_(num_clusters), max_iterations_(max_iterations), step_size_(step_size) {}
+    : num_clusters_(num_clusters)
+    , max_iterations_(max_iterations)
+    , step_size_(step_size)
+{
+}
 
-pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
+pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points)
+{
     // Compute surface normals
     pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
     pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> normal_estimator;
@@ -98,7 +102,6 @@ pcl::PointCloud<pcl::PointXYZ> GMMDetector::get_detections(const pcl::PointCloud
     }
 
     return detections;
-
 }
 
 } // namespace pcl_detector

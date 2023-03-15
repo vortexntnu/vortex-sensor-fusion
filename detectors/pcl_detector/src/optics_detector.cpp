@@ -2,8 +2,8 @@
 
 namespace pcl_detector {
 
-
-pcl::PointCloud<pcl::PointXYZ> OPTICSDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) {
+pcl::PointCloud<pcl::PointXYZ> OPTICSDetector::get_detections(const pcl::PointCloud<pcl::PointXYZ>& points)
+{
     pcl::PointCloud<pcl::PointXYZ> detections;
 
     // Create KD-Tree for efficient neighborhood search
@@ -57,13 +57,13 @@ pcl::PointCloud<pcl::PointXYZ> OPTICSDetector::get_detections(const pcl::PointCl
     return detections;
 }
 
-
 void OPTICSDetector::expand_cluster(const pcl::PointCloud<pcl::PointXYZ>& points,
-                    pcl::KdTreeFLANN<pcl::PointXYZ>& kdtree,
-                    int point_idx,
-                    std::vector<int>& predecessor,
-                    std::vector<bool>& visited,
-                    std::vector<float>& reachability_distance) {
+    pcl::KdTreeFLANN<pcl::PointXYZ>& kdtree,
+    int point_idx,
+    std::vector<int>& predecessor,
+    std::vector<bool>& visited,
+    std::vector<float>& reachability_distance)
+{
     visited[point_idx] = true;
 
     std::vector<int> neighbors;

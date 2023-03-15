@@ -1,58 +1,59 @@
 #include "pcl_detector/pcl_detector_ros.hpp"
 
-
-std::unique_ptr<pcl_detector::IPclDetector> PclDetectorRos::initialize_detector(std::string detector) {
+std::unique_ptr<pcl_detector::IPclDetector> PclDetectorRos::initialize_detector(std::string detector)
+{
 
     std::string detector_name = m_prefix + "/" + detector;
     std::unique_ptr<pcl_detector::IPclDetector> configured_detector = nullptr;
 
-    switch(detector_type[detector]){
+    switch (detector_type[detector]) {
 
-        case DetectorType::DBSCAN: { 
-            
-            float eps = get_and_set_rosparam<float>(detector_name + "/epsilon");
-            int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
-            m_detector = std::make_unique<pcl_detector::DBSCANDetector>(eps, min_points);
-            ROS_INFO_STREAM("Configured " << detector << " with eps=" << eps << " and min_points=" << min_points <<"\n");
-            break;
-        } 
+    case DetectorType::DBSCAN: {
 
-        case DetectorType::Euclidean: {
-            double cluster_tolerance = get_and_set_rosparam<double>(detector_name + "/cluster_tolerance");
-            int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
-            m_detector = std::make_unique<pcl_detector::EuclideanClusteringDetector>(cluster_tolerance, min_points);
-            ROS_INFO_STREAM("Configured " << detector << " with cluster_tolerance=" << cluster_tolerance << " and min_points=" << min_points <<"\n");
-            break;
-        }
+        float eps = get_and_set_rosparam<float>(detector_name + "/epsilon");
+        int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
+        m_detector = std::make_unique<pcl_detector::DBSCANDetector>(eps, min_points);
+        ROS_INFO_STREAM("Configured " << detector << " with eps=" << eps << " and min_points=" << min_points << "\n");
+        break;
+    }
 
-        case DetectorType::GMM: {
-            int num_clusters = get_and_set_rosparam<int>(detector_name + "/num_clusters");
-            int max_iterations = get_and_set_rosparam<int>(detector_name + "/max_iterations");
-            int step_size = get_and_set_rosparam<int>(detector_name + "/step_size");
+    case DetectorType::Euclidean: {
+        double cluster_tolerance = get_and_set_rosparam<double>(detector_name + "/cluster_tolerance");
+        int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
+        m_detector = std::make_unique<pcl_detector::EuclideanClusteringDetector>(cluster_tolerance, min_points);
+        ROS_INFO_STREAM("Configured " << detector << " with cluster_tolerance=" << cluster_tolerance << " and min_points=" << min_points << "\n");
+        break;
+    }
 
-            m_detector = std::make_unique<pcl_detector::GMMDetector>(num_clusters, max_iterations, step_size);
-            ROS_INFO_STREAM("Configured " << detector << " with num_clusters=" << num_clusters << ", max_iterations= " << max_iterations << " and step_size=" << step_size <<"\n");
-            break;
-        }
+    case DetectorType::GMM: {
+        int num_clusters = get_and_set_rosparam<int>(detector_name + "/num_clusters");
+        int max_iterations = get_and_set_rosparam<int>(detector_name + "/max_iterations");
+        int step_size = get_and_set_rosparam<int>(detector_name + "/step_size");
 
-        case DetectorType::OPTICS: {
-            float eps = get_and_set_rosparam<float>(detector_name + "/epsilon");
-            int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
-            m_detector = std::make_unique<pcl_detector::OPTICSDetector>(eps, min_points);
-            ROS_INFO_STREAM("Configured " << detector << " with eps=" << eps << " and min_points=" << min_points <<"\n");
-            break;
-        }
+        m_detector = std::make_unique<pcl_detector::GMMDetector>(num_clusters, max_iterations, step_size);
+        ROS_INFO_STREAM("Configured " << detector << " with num_clusters=" << num_clusters << ", max_iterations= " << max_iterations << " and step_size=" << step_size << "\n");
+        break;
+    }
 
-        default: {
-            ROS_FATAL("Invalid pcl detector specified! Shutting down...");
-            ros::shutdown();             
-        }
+    case DetectorType::OPTICS: {
+        float eps = get_and_set_rosparam<float>(detector_name + "/epsilon");
+        int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
+        m_detector = std::make_unique<pcl_detector::OPTICSDetector>(eps, min_points);
+        ROS_INFO_STREAM("Configured " << detector << " with eps=" << eps << " and min_points=" << min_points << "\n");
+        break;
+    }
+
+    default: {
+        ROS_FATAL("Invalid pcl detector specified! Shutting down...");
+        ros::shutdown();
+    }
     }
 
     return std::move(configured_detector);
 }
 
-PclDetectorRos::PclDetectorRos(ros::NodeHandle nh) : m_nh{ nh }
+PclDetectorRos::PclDetectorRos(ros::NodeHandle nh)
+    : m_nh{ nh }
 {
 
     m_pointcloud_sub = nh.subscribe<sensor_msgs::PointCloud2>("/os_cloud_node/points", 1, &PclDetectorRos::pointcloud_callback, this);
@@ -72,19 +73,20 @@ PclDetectorRos::PclDetectorRos(ros::NodeHandle nh) : m_nh{ nh }
     m_config_server.setCallback(boost::bind(&PclDetectorRos::reconfigure_callback, this, _1, _2));
 }
 
-void PclDetectorRos::reconfigure_callback(pcl_detector::PclDetectorConfig &config, uint32_t level) {
+void PclDetectorRos::reconfigure_callback(pcl_detector::PclDetectorConfig& config, uint32_t level)
+{
 
-    if(m_first_config) {
+    if (m_first_config) {
         m_first_config = false;
         return; // the reconfigure callback is called once by default on launch. We don't want since that overwrites the yaml params.
-    } 
+    }
 
     auto new_detector_type = DetectorType(config.detector_type);
     std::string new_detector_name = "";
-    for (const auto& entry: detector_type) {
+    for (const auto& entry : detector_type) {
         if (entry.second == new_detector_type) {
             new_detector_name = entry.first;
-        } 
+        }
     }
 
     if (new_detector_name == "") {
@@ -107,8 +109,9 @@ void PclDetectorRos::reconfigure_callback(pcl_detector::PclDetectorConfig &confi
     m_detector = initialize_detector(new_detector_name);
 }
 
-template<typename T>
-T PclDetectorRos::get_and_set_rosparam(std::string rosparam_name) {
+template <typename T>
+T PclDetectorRos::get_and_set_rosparam(std::string rosparam_name)
+{
 
     T parameter;
 
@@ -119,7 +122,6 @@ T PclDetectorRos::get_and_set_rosparam(std::string rosparam_name) {
 
     return parameter;
 }
-
 
 void PclDetectorRos::pointcloud_callback(
     const sensor_msgs::PointCloud2::ConstPtr& cloud_msg)
@@ -173,6 +175,4 @@ void PclDetectorRos::pointcloud_callback(
     }
 
     m_centroid_pose_pub.publish(centroids_point_msg);
-
-
 }

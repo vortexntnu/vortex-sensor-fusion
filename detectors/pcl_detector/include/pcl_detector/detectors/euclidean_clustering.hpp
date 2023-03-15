@@ -24,5 +24,4 @@ private:
 
 }; // namespace pcl_detector
 
-
 #endif // EEUCLIDEAN_CLUSTERING_H
