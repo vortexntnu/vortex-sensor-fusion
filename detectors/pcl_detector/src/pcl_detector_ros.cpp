@@ -12,7 +12,7 @@ std::unique_ptr<pcl_detector::IPclDetector> PclDetectorRos::initialize_detector(
 
         float eps = get_and_set_rosparam<float>(detector_name + "/epsilon");
         int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
-        m_detector = std::make_unique<pcl_detector::DBSCANDetector>(eps, min_points);
+        configured_detector = std::make_unique<pcl_detector::DBSCANDetector>(eps, min_points);
         ROS_INFO_STREAM("Configured " << detector << " with eps=" << eps << " and min_points=" << min_points << "\n");
         break;
     }
@@ -20,26 +20,8 @@ std::unique_ptr<pcl_detector::IPclDetector> PclDetectorRos::initialize_detector(
     case DetectorType::Euclidean: {
         double cluster_tolerance = get_and_set_rosparam<double>(detector_name + "/cluster_tolerance");
         int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
-        m_detector = std::make_unique<pcl_detector::EuclideanClusteringDetector>(cluster_tolerance, min_points);
+        configured_detector = std::make_unique<pcl_detector::EuclideanClusteringDetector>(cluster_tolerance, min_points);
         ROS_INFO_STREAM("Configured " << detector << " with cluster_tolerance=" << cluster_tolerance << " and min_points=" << min_points << "\n");
-        break;
-    }
-
-    case DetectorType::GMM: {
-        int num_clusters = get_and_set_rosparam<int>(detector_name + "/num_clusters");
-        int max_iterations = get_and_set_rosparam<int>(detector_name + "/max_iterations");
-        int step_size = get_and_set_rosparam<int>(detector_name + "/step_size");
-
-        m_detector = std::make_unique<pcl_detector::GMMDetector>(num_clusters, max_iterations, step_size);
-        ROS_INFO_STREAM("Configured " << detector << " with num_clusters=" << num_clusters << ", max_iterations= " << max_iterations << " and step_size=" << step_size << "\n");
-        break;
-    }
-
-    case DetectorType::OPTICS: {
-        float eps = get_and_set_rosparam<float>(detector_name + "/epsilon");
-        int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
-        m_detector = std::make_unique<pcl_detector::OPTICSDetector>(eps, min_points);
-        ROS_INFO_STREAM("Configured " << detector << " with eps=" << eps << " and min_points=" << min_points << "\n");
         break;
     }
 
@@ -100,11 +82,6 @@ void PclDetectorRos::reconfigure_callback(pcl_detector::PclDetectorConfig& confi
     m_nh.setParam(m_prefix + "/dbscan/min_points", config.dbscan_min_points);
     m_nh.setParam(m_prefix + "/euclidean/cluster_tolerance", config.euclidean_cluster_tolerance);
     m_nh.setParam(m_prefix + "/euclidean/min_points", config.euclidean_min_points);
-    m_nh.setParam(m_prefix + "/gmm/num_clusters", config.gmm_num_clusters);
-    m_nh.setParam(m_prefix + "/gmm/max_iterations", config.gmm_max_iterations);
-    m_nh.setParam(m_prefix + "/gmm/step_size", config.gmm_step_size);
-    m_nh.setParam(m_prefix + "/optics/epsilon", config.optics_epsilon);
-    m_nh.setParam(m_prefix + "/optics/min_points", config.optics_min_points);
 
     m_detector = initialize_detector(new_detector_name);
 }
