@@ -15,8 +15,6 @@
 
 #include "pcl_detector/detectors/dbscan_detector.hpp"
 #include "pcl_detector/detectors/euclidean_clustering.hpp"
-#include "pcl_detector/detectors/gmm_detector.hpp"
-#include "pcl_detector/detectors/optics_detector.hpp"
 #include "pcl_detector/pcl_detector.hpp"
 
 #include <dynamic_reconfigure/server.h>
@@ -26,8 +24,6 @@
 enum class DetectorType {
     DBSCAN,
     Euclidean,
-    GMM,
-    OPTICS
 };
 
 class PclDetectorRos {
@@ -59,8 +55,6 @@ private:
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },
         { "euclidean", DetectorType::Euclidean },
-        { "gmm", DetectorType::GMM },
-        { "optics", DetectorType::OPTICS }
     };
 
     std::unique_ptr<pcl_detector::IPclDetector> initialize_detector(std::string detector);

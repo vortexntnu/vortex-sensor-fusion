@@ -38,8 +38,6 @@ add_executable(${BINARY_NAME}
     src/pcl_detector_ros.cpp
     src/euclidean_clustering.cpp
     src/dbscan_detector.cpp
-    src/optics_detector.cpp
-    src/gmm_detector.cpp
 )
 
 target_link_libraries(${BINARY_NAME}

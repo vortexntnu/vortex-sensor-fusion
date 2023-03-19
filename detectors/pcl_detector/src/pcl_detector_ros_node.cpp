@@ -1,7 +1,3 @@
-#include "pcl_detector/detectors/dbscan_detector.hpp"
-#include "pcl_detector/detectors/euclidean_clustering.hpp"
-#include "pcl_detector/detectors/gmm_detector.hpp"
-#include "pcl_detector/detectors/optics_detector.hpp"
 #include "pcl_detector/pcl_detector_ros.hpp"
 
 using namespace pcl_detector;

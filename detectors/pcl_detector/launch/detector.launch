@@ -10,6 +10,6 @@
         <arg name="sensor_hostname" value="$(arg ip)"/>
     </include>
 
-    <node pkg="pcl_detector" type="pcl_detector_ros_node" name="pcl_detector_ros_node" output="screen"/>
+    <node pkg="pcl_detector" type="pcl_detector_ros_node" name="pcl_detector_ros_node" output="screen" respawn="true"/>
 
 </launch>
