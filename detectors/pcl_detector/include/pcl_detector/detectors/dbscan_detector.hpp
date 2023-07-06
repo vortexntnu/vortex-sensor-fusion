@@ -6,37 +6,32 @@
 #ifndef DBSCAN_DETECTOR_H
 #define DBSCAN_DETECTOR_H
 
-#include <pcl/segmentation/extract_clusters.h>
-
 #include "pcl_detector/pcl_detector.hpp"
+
+#include <pcl/common/centroid.h>
+#include <pcl/filters/extract_indices.h>
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/search/search.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 namespace pcl_detector {
 
-/**
- * @class DBSCANDetector
- * @brief A DBSCAN detector that implements the IPclDetector interface.
- */
 class DBSCANDetector : public IPclDetector {
 
 public:
-    /**
-     * @brief Constructs a DBSCAN detector with the given parameters.
-     * @param eps The maximum distance between two points for them to be considered as part of the same cluster.
-     * @param min_points The minimum number of points for a cluster to be considered valid.
-     */
-    DBSCANDetector(double eps, int min_points) : eps_(eps), min_points_(min_points) {}
+    DBSCANDetector(float eps, int min_points)
+        : m_eps(eps)
+        , m_min_points(min_points)
+    {
+    }
 
-    /**
-     * @brief Detects clusters in the given point cloud using DBSCAN.
-     * @param points The input point cloud.
-     * @return The detected clusters as a point cloud.
-     */
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 
 private:
-    double eps_; /**< The maximum distance between two points for them to be considered as part of the same cluster. */
-    int min_points_; /**< The minimum number of points for a cluster to be considered valid. */
-
+    float m_eps;
+    int m_min_points;
 };
 
 }; // namespace pcl_detector
