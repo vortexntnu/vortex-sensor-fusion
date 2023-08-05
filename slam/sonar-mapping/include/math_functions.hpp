@@ -3,6 +3,7 @@
 #include <math.h>
 #include <vector>
 #include <iostream>
+#include <numeric>
 
 // Declaring namespaces
 using namespace std;
