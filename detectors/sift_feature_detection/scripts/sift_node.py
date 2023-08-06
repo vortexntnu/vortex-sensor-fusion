@@ -167,7 +167,7 @@ class SiftFeature:
         rospy.init_node(node_name)
 
         # The frame object gets detected in
-        self.frame_id = "zed2_left_camera_sensor"
+        self.frame_id = "zed2i_left_camera_sensor"
 
         #Subscribers
         rospy.Subscriber("/fsm/state", String, self.update_object_search)

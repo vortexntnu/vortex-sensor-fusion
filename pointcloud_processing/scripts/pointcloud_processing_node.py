@@ -196,8 +196,8 @@ class PointcloudProcessingNode():
         # Pose generation
         pose_msg_camera = PoseStamped()
         # Format header
-        pose_msg_camera.header.frame_id = "zed2_left_camera_frame"
-        pose_msg_camera.header.stamp = rospy.get_rostime()
+        pose_msg_camera.header.frame_id = "zed2i_left_camera_frame"
+        pose_msg_camera.header.stamp = rospy.get_rostime()_
 
         # Build pose
 
@@ -234,7 +234,7 @@ class PointcloudProcessingNode():
         # For testing
         pointPub = rospy.Publisher('/pointcloud_processing/object_point/' + name, PointStamped, queue_size= 1)
         new_point = PointStamped()
-        new_point.header.frame_id = "zed2_left_camera_frame"
+        new_point.header.frame_id = "zed2i_left_camera_frame"
         new_point.header.stamp = rospy.get_rostime()
         new_point.point.x = position[0]
         new_point.point.y = position[1]
