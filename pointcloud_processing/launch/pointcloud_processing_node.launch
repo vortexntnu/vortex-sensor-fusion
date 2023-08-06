@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- <param name ="/use_sim_time" value="true"/> -->
+    <!-- Pointcloud processing node -->
+    <node name="pointcloud_processing_node"    pkg="pointcloud_processing"     type="pointcloud_processing_node.py"    output="screen"/>
+
+    <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="detection" args="0 0 0 0 0 0 zed2_left_camera_frame detection" /> -->
+    <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="odom_to_qualsys_odom" args="0 0 0 0 0 0 map mocap" output="screen" /> -->
+    <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="qualsys_base_link_to_camera_center" args="0.3175 0 0.10 0 -0.296706 -0.0087266 base_link zed2_left_camera_frame" output="screen" /> -->
+</launch>
