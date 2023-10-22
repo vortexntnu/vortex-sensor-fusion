@@ -9,23 +9,15 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-#find_package(PCL REQUIRED)
+# Find ROS 2 packages
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
-find_package(PCL REQUIRED COMPONENTS common)
-# find_package(PCL 1.10 REQUIRED)
-# find_package(PCL COMPONENT REQUIRED)
-# find_package(PCL REQUIRED)
 
-# include_directories(include ${PCL_INCLUDE_DIRS} )
-
-# target_link_libraries(lidar_sub
-#   ${PCL_LIBRARIES}
-# )
-
+# Add PCL to your package dependencies
+find_package(PCL REQUIRED)
 
 add_executable(lidar_sub src/lidar_listener.cpp)
 ament_target_dependencies(lidar_sub 
@@ -34,11 +26,14 @@ ament_target_dependencies(lidar_sub
   sensor_msgs 
   pcl_conversions
 )
+
+# Link against PCL libraries
 target_link_libraries(lidar_sub 
-  pcl_common)
+  ${PCL_LIBRARIES}
+)
+
 install(TARGETS
   lidar_sub
   DESTINATION lib/${PROJECT_NAME})
 
-# ament_export_include_directories(include)
 ament_package()
