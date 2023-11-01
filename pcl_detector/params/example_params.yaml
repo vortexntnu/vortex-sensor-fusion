@@ -1,0 +1,20 @@
+pcl_detector:
+  leaf_size: 0.05
+  detector_type: "dbscan" # one of "dbscan", "euclidean", "gmm", "optics"
+  
+  dbscan:
+    epsilon: 0.5
+    min_points: 70
+
+  euclidean:
+    cluster_tolerance: 1
+    min_points: 100
+
+  gmm:
+    num_clusters: 10
+    max_iterations: 100
+    step_size: 0.01
+
+  optics:
+    epsilon: 1
+    min_points: 100

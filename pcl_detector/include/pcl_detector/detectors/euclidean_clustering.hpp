@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pcl_detector/pcl_detector.hpp"
+#include <pcl_detector/pcl_detector_interface.hpp>
 
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_cloud.h>
@@ -9,7 +9,7 @@
 
 namespace pcl_detector {
 
-class EuclideanClusteringDetector : public pcl_detector::IPclDetector {
+class EuclideanClusteringDetector : public IPclDetector {
 
 public:
     EuclideanClusteringDetector(double cluster_tolerance, int min_cluster_size);

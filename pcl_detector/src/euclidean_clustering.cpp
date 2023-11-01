@@ -1,4 +1,4 @@
-#include "pcl_detector/detectors/euclidean_clustering.hpp"
+#include <pcl_detector/detectors/euclidean_clustering.hpp>
 
 namespace pcl_detector {
 
