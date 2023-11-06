@@ -15,7 +15,7 @@ pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCl
     int label = 0;
 
     // Iterate through each point in the point cloud
-    for (int i = 0; i < points.size(); ++i) {
+    for (size_t i = 0; i < points.size(); ++i) {
         if (labels[i] != -1) {
             continue; // Already classified, skip to next point
         }
@@ -33,7 +33,7 @@ pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCl
         labels[i] = label;
 
         // Iterate through neighbors and expand cluster
-        for (int j = 0; j < neighbors.size(); ++j) {
+        for (size_t j = 0; j < neighbors.size(); ++j) {
             int neighbor = neighbors[j];
             if (labels[neighbor] == 0) {
                 labels[neighbor] = label; // Convert noise to border point
@@ -54,7 +54,7 @@ pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCl
     std::vector<pcl::PointCloud<pcl::PointXYZ>> clusters;
     for (int i = 1; i <= label; ++i) {
         pcl::PointIndices::Ptr indices(new pcl::PointIndices);
-        for (int j = 0; j < labels.size(); ++j) {
+        for (size_t j = 0; j < labels.size(); ++j) {
             if (labels[j] == i) {
                 indices->indices.push_back(j);
                 labels[j] = -1; // Remove point from labels to avoid duplicates

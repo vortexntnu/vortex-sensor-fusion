@@ -30,7 +30,7 @@ public:
 
 private:
     float m_eps;
-    int m_min_points;
+    size_t m_min_points;
 };
 
 }; // namespace pcl_detector

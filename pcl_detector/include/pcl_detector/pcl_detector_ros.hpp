@@ -21,8 +21,8 @@
 #include <std_msgs/msg/header.hpp>
 
 enum class DetectorType {
-    DBSCAN,
     Euclidean,
+    DBSCAN,
 };
 
 
@@ -62,7 +62,7 @@ class PclDetectorNode : public rclcpp::Node
      */
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
 
-
+    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
 
  
     // ROS2 subscriber and related topic name
@@ -73,20 +73,18 @@ class PclDetectorNode : public rclcpp::Node
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
     std::string param_topic_pointcloud_out_;
 
-   
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_callback_handle_;
 
     std::unique_ptr<pcl_detector::IPclDetector> m_detector;
    
     std::string m_prefix = "/pcl_detector";
 
+    bool parameters_changed = false;
+
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },
         { "euclidean", DetectorType::Euclidean },
-    };
-
-
-    
-    
+    };  
 };
 
 } // namespace pcl_detector
