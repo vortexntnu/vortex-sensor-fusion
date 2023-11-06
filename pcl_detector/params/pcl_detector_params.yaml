@@ -1,21 +1,12 @@
-pcl_detector:
+pcl_detector_node:
   ros__parameters:
-    leaf_size: 0.05
+    leaf_size: 0.1
     detector: "dbscan" # one of "dbscan", "euclidean"
     
     dbscan:
       epsilon: 0.5
-      min_points: 70
+      min_points: 10
 
     euclidean:
-      cluster_tolerance: 1
-      min_points: 100
-
-    # gmm:
-    #   num_clusters: 10
-    #   max_iterations: 100
-    #   step_size: 0.01
-
-    # optics:
-    #   epsilon: 1
-    #   min_points: 100
+      cluster_tolerance: 1.0
+      min_points: 10

@@ -76,8 +76,6 @@ class PclDetectorNode : public rclcpp::Node
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_callback_handle_;
 
     std::unique_ptr<pcl_detector::IPclDetector> m_detector;
-   
-    std::string m_prefix = "/pcl_detector";
 
     bool parameters_changed = false;
 
