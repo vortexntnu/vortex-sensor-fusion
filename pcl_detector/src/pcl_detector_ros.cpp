@@ -15,11 +15,11 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
 
   // Read parameters from YAML file or set default values
   declare_parameter<std::string>("detector", "euclidean");
-  declare_parameter<float>("dbscan.epsilon", 0.6);
-  declare_parameter<int>("dbscan.min_points", 11);
+  declare_parameter<float>("dbscan.epsilon", 2.0);
+  declare_parameter<int>("dbscan.min_points", 20);
   declare_parameter<float>("euclidean.cluster_tolerance", 1.0);
-  declare_parameter<int>("euclidean.min_points", 99);
-  declare_parameter<float>("leaf_size", 0.11);
+  declare_parameter<int>("euclidean.min_points", 25);
+  declare_parameter<float>("leaf_size", 0.1);
 
   param_topic_pointcloud_in_ = get_parameter("topic_pointcloud_in").as_string();
   param_topic_pointcloud_out_ = get_parameter("topic_pointcloud_out").as_string();
@@ -115,7 +115,6 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
 
     // Downsamples PointCloud using VoxelGrid filter
     pcl::PointCloud<pcl::PointXYZ>::Ptr downsampled_cloud(new pcl::PointCloud<pcl::PointXYZ>);
-
     float m_leaf_size;
     get_parameter<float>("leaf_size", m_leaf_size);  
     pcl::VoxelGrid<pcl::PointXYZ> sor;
@@ -129,10 +128,10 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     pcl::PointCloud<pcl::PointXYZ> detections = m_detector->get_detections(*downsampled_cloud);
 
     if (detections.size() == 0) {
-        RCLCPP_WARN(this->get_logger(), "No clusters detected!");
+        RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
     }
 
-    // 
+    // Converts the clusters-PointCloud to an appropriate msg for publishing
     sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
     pcl::toROSMsg(detections, centroids_cloud_msg);
     centroids_cloud_msg.header.frame_id = cloud_msg->header.frame_id;

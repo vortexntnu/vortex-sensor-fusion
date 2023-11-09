@@ -4,9 +4,9 @@ pcl_detector_node:
     detector: "dbscan" # one of "dbscan", "euclidean"
     
     dbscan:
-      epsilon: 0.5
-      min_points: 10
+      epsilon: 2.0
+      min_points: 20
 
     euclidean:
       cluster_tolerance: 1.0
-      min_points: 10
+      min_points: 25
