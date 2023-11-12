@@ -22,9 +22,9 @@ pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCl
 
         std::vector<int> neighbors;
         std::vector<float> distances;
-        tree->radiusSearch(points[i], m_eps, neighbors, distances); // Find neighbors within radius eps
+        tree->radiusSearch(points[i], eps_, neighbors, distances); // Find neighbors within radius eps
 
-        if (neighbors.size() < m_min_points) {
+        if (neighbors.size() < min_points_) {
             labels[i] = 0; // Mark as noise
             continue;
         }
@@ -43,8 +43,8 @@ pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCl
             labels[neighbor] = label; // Add neighbor to current cluster
             std::vector<int> sub_neighbors;
             std::vector<float> sub_distances;
-            tree->radiusSearch(points[neighbor], m_eps, sub_neighbors, sub_distances);
-            if (sub_neighbors.size() >= m_min_points) {
+            tree->radiusSearch(points[neighbor], eps_, sub_neighbors, sub_distances);
+            if (sub_neighbors.size() >= min_points_) {
                 neighbors.insert(neighbors.end(), sub_neighbors.begin(), sub_neighbors.end());
             }
         }
@@ -65,7 +65,7 @@ pcl::PointCloud<pcl::PointXYZ> DBSCANDetector::get_detections(const pcl::PointCl
         extract.setIndices(indices);
         pcl::PointCloud<pcl::PointXYZ> cluster;
         extract.filter(cluster);
-        if (cluster.size() >= m_min_points) {
+        if (cluster.size() >= min_points_) {
             clusters.push_back(cluster);
         }
     }

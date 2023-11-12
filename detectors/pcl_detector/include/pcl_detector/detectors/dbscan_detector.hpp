@@ -21,16 +21,16 @@ class DBSCANDetector : public IPclDetector {
 
 public:
     DBSCANDetector(float eps, int min_points)
-        : m_eps(eps)
-        , m_min_points(min_points)
+        : eps_(eps)
+        , min_points_(min_points)
     {
     }
 
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 
 private:
-    float m_eps;
-    size_t m_min_points;
+    float eps_;
+    size_t min_points_;
 };
 
 }; // namespace pcl_detector

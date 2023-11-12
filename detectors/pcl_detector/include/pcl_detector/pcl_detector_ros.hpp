@@ -75,9 +75,9 @@ class PclDetectorNode : public rclcpp::Node
 
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_callback_handle_;
 
-    std::unique_ptr<pcl_detector::IPclDetector> m_detector;
+    std::unique_ptr<pcl_detector::IPclDetector> detector_;
 
-    bool parameters_changed = false;
+    bool parameters_changed_ = false;
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },

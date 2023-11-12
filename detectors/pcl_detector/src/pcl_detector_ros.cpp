@@ -39,14 +39,15 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   // Initialize the detector with configured parameters
   std::string detector;
   get_parameter<std::string>("detector", detector);
-  m_detector = initialize_detector(detector);
+  detector_ = initialize_detector(detector);
 }
 
 // Callback function for parameter changes
 rcl_interfaces::msg::SetParametersResult PclDetectorNode::parametersCallback(const std::vector<rclcpp::Parameter> &parameters) {
-    std::string detector_name;
+    
     rcl_interfaces::msg::SetParametersResult result;
 
+    // Checks if the detector parameter is valid, if result.successful is false, the parameter is not set
     for (const auto &parameter : parameters) {
         if (parameter.get_name() == "detector") {
             if (detector_type.count(parameter.as_string()) == 0) {
@@ -56,7 +57,7 @@ rcl_interfaces::msg::SetParametersResult PclDetectorNode::parametersCallback(con
         }
     }
     
-    parameters_changed = true;
+    parameters_changed_ = true;
     result.successful = true;
     result.reason = "success";
     return result;
@@ -101,12 +102,12 @@ std::unique_ptr<IPclDetector> PclDetectorNode::initialize_detector(std::string d
 void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg)
 {
     // Check if parameters have changed
-    if (parameters_changed) {
+    if (parameters_changed_) {
         std::string detector;
         get_parameter<std::string>("detector", detector);
         
-        m_detector = initialize_detector(detector);
-        parameters_changed = false;
+        detector_ = initialize_detector(detector);
+        parameters_changed_ = false;
     }
 
     // Converts incoming PointCloud2-msg to a PointCloud 
@@ -125,7 +126,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
 
 
     // Finds clusters with the configured detector
-    pcl::PointCloud<pcl::PointXYZ> detections = m_detector->get_detections(*downsampled_cloud);
+    pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*downsampled_cloud);
 
     if (detections.size() == 0) {
         RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");

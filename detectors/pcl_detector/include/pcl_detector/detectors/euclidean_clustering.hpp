@@ -17,8 +17,8 @@ public:
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 
 private:
-    double m_cluster_tolerance;
-    int m_min_cluster_size;
+    double cluster_tolerance_;
+    int min_cluster_size_;
 };
 
 }; // namespace pcl_detector
