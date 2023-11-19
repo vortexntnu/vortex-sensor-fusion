@@ -8,6 +8,10 @@
 
 namespace pcl_detector {
 
+
+/**
+ * @brief A interface for pcl detectors
+ */
 class IPclDetector {
 
 public:

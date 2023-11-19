@@ -1,155 +1,144 @@
-#include "pcl_detector/pcl_detector_ros.hpp"
+#define BOOST_BIND_NO_PLACEHOLDERS
 
-std::unique_ptr<pcl_detector::IPclDetector> PclDetectorRos::initialize_detector(std::string detector)
+#include <pcl_detector/pcl_detector_ros.hpp>
+
+using std::placeholders::_1;
+
+namespace pcl_detector {
+
+// Constructor for the PclDetectorNode class
+PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl_detector_node", options) 
 {
+  // Configure default topics for subscribing/publishing
+  declare_parameter<std::string>("topic_pointcloud_in", "ouster/points");
+  declare_parameter<std::string>("topic_pointcloud_out", "lidar/centroids");
 
-    std::string detector_name = m_prefix + "/" + detector;
-    std::unique_ptr<pcl_detector::IPclDetector> configured_detector = nullptr;
+  // Read parameters from YAML file or set default values
+  declare_parameter<std::string>("detector", "euclidean");
+  declare_parameter<float>("dbscan.epsilon", 2.0);
+  declare_parameter<int>("dbscan.min_points", 20);
+  declare_parameter<float>("euclidean.cluster_tolerance", 1.0);
+  declare_parameter<int>("euclidean.min_points", 25);
+  declare_parameter<float>("leaf_size", 0.1);
+
+  param_topic_pointcloud_in_ = get_parameter("topic_pointcloud_in").as_string();
+  param_topic_pointcloud_out_ = get_parameter("topic_pointcloud_out").as_string();
+
+  // Define the quality of service profile for publisher and subscriber
+  rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
+  qos_profile.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
+  auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 1), qos_profile);
+  
+  publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(param_topic_pointcloud_out_, qos);
+  subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+    param_topic_pointcloud_in_, qos, std::bind(&PclDetectorNode::topic_callback, this, _1));
+
+  // Define a handle for validating parameters during runtime  
+  on_set_callback_handle_ = add_on_set_parameters_callback(std::bind(&PclDetectorNode::parametersCallback, this, std::placeholders::_1));
+  
+  // Initialize the detector with configured parameters
+  std::string detector;
+  get_parameter<std::string>("detector", detector);
+  detector_ = initialize_detector(detector);
+}
+
+// Callback function for parameter changes
+rcl_interfaces::msg::SetParametersResult PclDetectorNode::parametersCallback(const std::vector<rclcpp::Parameter> &parameters) {
+    
+    rcl_interfaces::msg::SetParametersResult result;
+
+    // Checks if the detector parameter is valid, if result.successful is false, the parameter is not set
+    for (const auto &parameter : parameters) {
+        if (parameter.get_name() == "detector") {
+            if (detector_type.count(parameter.as_string()) == 0) {
+                result.successful = false;
+                return result;
+            }
+        }
+    }
+    
+    parameters_changed_ = true;
+    result.successful = true;
+    result.reason = "success";
+    return result;
+}
+
+// Initialize the selected detector based on the parameter
+std::unique_ptr<IPclDetector> PclDetectorNode::initialize_detector(std::string detector)
+{
+    std::unique_ptr<IPclDetector> configured_detector = nullptr;
 
     switch (detector_type[detector]) {
+        case DetectorType::Euclidean: {
+            float cluster_tolerance;
+            get_parameter<float>("euclidean.cluster_tolerance", cluster_tolerance);
+            int min_points;
+            get_parameter<int>("euclidean.min_points", min_points);
+            configured_detector = std::make_unique<EuclideanClusteringDetector>(cluster_tolerance, min_points);
+            RCLCPP_INFO_STREAM(this->get_logger(), "Euclidean detector initialized with cluster tolerance = " << cluster_tolerance << " and min_points = " << min_points);
+            break;
+        }
 
-    case DetectorType::DBSCAN: {
+        case DetectorType::DBSCAN: {
+            float eps; 
+            get_parameter<float>("dbscan.epsilon", eps);
+            int min_points;
+            get_parameter<int>("dbscan.min_points", min_points);
+            configured_detector = std::make_unique<DBSCANDetector>(eps, min_points);
+            RCLCPP_INFO_STREAM(this->get_logger(), "DBSCAN detector initialized with eps = " << eps << " and min_points = " << min_points);
+            break;
+        }
 
-        float eps = get_and_set_rosparam<float>(detector_name + "/epsilon");
-        int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
-        configured_detector = std::make_unique<pcl_detector::DBSCANDetector>(eps, min_points);
-        ROS_INFO_STREAM("Configured " << detector << " with eps=" << eps << " and min_points=" << min_points << "\n");
-        break;
-    }
-
-    case DetectorType::Euclidean: {
-        double cluster_tolerance = get_and_set_rosparam<double>(detector_name + "/cluster_tolerance");
-        int min_points = get_and_set_rosparam<int>(detector_name + "/min_points");
-        configured_detector = std::make_unique<pcl_detector::EuclideanClusteringDetector>(cluster_tolerance, min_points);
-        ROS_INFO_STREAM("Configured " << detector << " with cluster_tolerance=" << cluster_tolerance << " and min_points=" << min_points << "\n");
-        break;
-    }
-
-    default: {
-        ROS_FATAL("Invalid pcl detector specified! Shutting down...");
-        ros::shutdown();
-    }
-    }
-
-    return std::move(configured_detector);
-}
-
-PclDetectorRos::PclDetectorRos(ros::NodeHandle nh)
-    : m_nh{ nh }
-{
-
-    m_pointcloud_sub = nh.subscribe<sensor_msgs::PointCloud2>("/os_cloud_node/points", 1, &PclDetectorRos::pointcloud_callback, this);
-
-    m_centroid_pub = m_nh.advertise<sensor_msgs::PointCloud2>(m_prefix + "/centroids", 1);
-    m_centroid_pose_pub = m_nh.advertise<geometry_msgs::PoseArray>("/lidar/clusters", 1);
-    m_downsample_pub = m_nh.advertise<sensor_msgs::PointCloud2>(m_prefix + "/downsampled_input", 1);
-
-    m_leaf_size = get_and_set_rosparam<float>(m_prefix + "/leaf_size");
-
-    std::string detector = get_and_set_rosparam<std::string>(m_prefix + "/detector_type");
-    std::string detector_name = m_prefix + "/" + detector;
-
-    // Get parameters for said detector type
-    m_detector = initialize_detector(detector);
-
-    m_config_server.setCallback(boost::bind(&PclDetectorRos::reconfigure_callback, this, _1, _2));
-}
-
-void PclDetectorRos::reconfigure_callback(pcl_detector::PclDetectorConfig& config, uint32_t level)
-{
-
-    if (m_first_config) {
-        m_first_config = false;
-        return; // the reconfigure callback is called once by default on launch. We don't want since that overwrites the yaml params.
-    }
-
-    auto new_detector_type = DetectorType(config.detector_type);
-    std::string new_detector_name = "";
-    for (const auto& entry : detector_type) {
-        if (entry.second == new_detector_type) {
-            new_detector_name = entry.first;
+        default: {
+            RCLCPP_ERROR(this->get_logger(), "Invalid pcl detector specified! Shutting down...");
+            rclcpp::shutdown();
         }
     }
 
-    if (new_detector_name == "") {
-        ROS_FATAL("Invalid detector type configured! Shutting down...");
-        ros::shutdown();
-    }
-
-    m_nh.setParam(m_prefix + "/detector_type", new_detector_name);
-    m_nh.setParam(m_prefix + "/leaf_size", config.leaf_size);
-    m_nh.setParam(m_prefix + "/dbscan/epsilon", config.dbscan_epsilon);
-    m_nh.setParam(m_prefix + "/dbscan/min_points", config.dbscan_min_points);
-    m_nh.setParam(m_prefix + "/euclidean/cluster_tolerance", config.euclidean_cluster_tolerance);
-    m_nh.setParam(m_prefix + "/euclidean/min_points", config.euclidean_min_points);
-
-    m_detector = initialize_detector(new_detector_name);
+    return configured_detector;
 }
 
-template <typename T>
-T PclDetectorRos::get_and_set_rosparam(std::string rosparam_name)
+// Callback function for processing incoming point cloud messages
+void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg)
 {
-
-    T parameter;
-
-    if (!m_nh.getParam(rosparam_name, parameter)) {
-        ROS_FATAL_STREAM("Failed to read parameter " << rosparam_name << ". Shutting down node..");
-        ros::shutdown();
+    // Check if parameters have changed
+    if (parameters_changed_) {
+        std::string detector;
+        get_parameter<std::string>("detector", detector);
+        
+        detector_ = initialize_detector(detector);
+        parameters_changed_ = false;
     }
 
-    return parameter;
-}
-
-void PclDetectorRos::pointcloud_callback(
-    const sensor_msgs::PointCloud2::ConstPtr& cloud_msg)
-{
-
+    // Converts incoming PointCloud2-msg to a PointCloud 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cartesian_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(*cloud_msg, *cartesian_cloud);
 
+    // Downsamples PointCloud using VoxelGrid filter
     pcl::PointCloud<pcl::PointXYZ>::Ptr downsampled_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+    float m_leaf_size;
+    get_parameter<float>("leaf_size", m_leaf_size);  
     pcl::VoxelGrid<pcl::PointXYZ> sor;
     sor.setInputCloud(cartesian_cloud->makeShared());
     sor.setLeafSize(m_leaf_size, m_leaf_size, m_leaf_size);
 
-    // ROS_INFO("Downsampling input cloud");
     sor.filter(*downsampled_cloud);
 
-    sensor_msgs::PointCloud2 downsample_cloud_msg;
-    pcl::toROSMsg(*downsampled_cloud, downsample_cloud_msg);
-    downsample_cloud_msg.header.frame_id = cloud_msg->header.frame_id;
-    downsample_cloud_msg.header.stamp = ros::Time::now();
-    m_downsample_pub.publish(downsample_cloud_msg);
 
-    // ROS_INFO("Starting clustering!");
-    auto detections = m_detector->get_detections(*downsampled_cloud);
-    // ROS_INFO("Finished clustering!");
+    // Finds clusters with the configured detector
+    pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*downsampled_cloud);
 
     if (detections.size() == 0) {
-        ROS_WARN("No clusters found");
+        RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
     }
 
-    sensor_msgs::PointCloud2 centroids_cloud_msg;
+    // Converts the clusters-PointCloud to an appropriate msg for publishing
+    sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
     pcl::toROSMsg(detections, centroids_cloud_msg);
     centroids_cloud_msg.header.frame_id = cloud_msg->header.frame_id;
-    centroids_cloud_msg.header.stamp = ros::Time::now();
-    m_centroid_pub.publish(centroids_cloud_msg);
+    centroids_cloud_msg.header.stamp = rclcpp::Clock().now();
 
-    geometry_msgs::PoseArray centroids_point_msg;
-    centroids_point_msg.header.frame_id = cloud_msg->header.frame_id;
-    centroids_point_msg.header.stamp = ros::Time::now();
-
-    for (auto detection : detections) {
-        geometry_msgs::Pose pose;
-        pose.position.x = detection.x;
-        pose.position.y = detection.y;
-        pose.position.z = detection.z;
-        pose.orientation.x = 0.0;
-        pose.orientation.y = 0.0;
-        pose.orientation.z = 0.0;
-        pose.orientation.w = 1.0;
-        centroids_point_msg.poses.push_back(pose);
-    }
-
-    m_centroid_pose_pub.publish(centroids_point_msg);
+    publisher_->publish(centroids_cloud_msg);
 }
+
+} // namespace pcl_detector

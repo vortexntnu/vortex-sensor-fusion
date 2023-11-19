@@ -1,63 +1,88 @@
-#ifndef PCL_DETECTOR_ROS_H
-#define PCL_DETECTOR_ROS_H
+#pragma once
 
-#include <ros/ros.h>
+#include <rclcpp/rclcpp.hpp>  
 
-#include <geometry_msgs/PointStamped.h>
-#include <geometry_msgs/Pose.h>
-#include <geometry_msgs/PoseArray.h>
-#include <sensor_msgs/PointCloud2.h>
+#include <memory>
+#include <iostream>
+#include <string>
+#include <stdio.h>
+#include <iterator>
+#include <algorithm>
 
-#include <pcl/PCLPointCloud2.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/point_cloud.h>
+#include <pcl_detector/detectors/dbscan_detector.hpp>
+#include <pcl_detector/detectors/euclidean_clustering.hpp>
+
+#include <pcl/io/pcd_io.h>
+#include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/filters/voxel_grid.h>
 
-#include "pcl_detector/detectors/dbscan_detector.hpp"
-#include "pcl_detector/detectors/euclidean_clustering.hpp"
-#include "pcl_detector/pcl_detector.hpp"
-
-#include <dynamic_reconfigure/server.h>
-#include <pcl_detector/PclDetectorConfig.h>
-#include <unordered_map>
+#include <sensor_msgs/msg/point_cloud2.hpp>
+#include <std_msgs/msg/header.hpp>
 
 enum class DetectorType {
-    DBSCAN,
     Euclidean,
+    DBSCAN,
 };
 
-class PclDetectorRos {
 
-public:
-    PclDetectorRos(ros::NodeHandle nh);
+namespace pcl_detector
+{
 
-private:
-    ros::NodeHandle m_nh;
-    ros::Subscriber m_pointcloud_sub;
-    ros::Publisher m_centroid_pub;
-    ros::Publisher m_centroid_pose_pub;
-    ros::Publisher m_downsample_pub;
-    dynamic_reconfigure::Server<pcl_detector::PclDetectorConfig> m_config_server;
+/**
+ * @class pcl_detector::pcl_detector
+ * @brief Receives Pointcloud2 message from lidar sensor and filter its points with an optional pcl filter.
+ * 
+ */
+class PclDetectorNode : public rclcpp::Node
+{
+  public:
+    
+    /**
+     * @brief A constructor for pcl_detector::pcl_detector class
+     * @param options Additional options to control creation of the node.
+     */
+    explicit PclDetectorNode(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
+    
+    /**
+     * @brief A destructor for PclDetectorNode::PclDetectorNode class
+     */
+    ~PclDetectorNode() {};
 
-    void pointcloud_callback(const sensor_msgs::PointCloud2::ConstPtr& cloud_msg);
-    void reconfigure_callback(pcl_detector::PclDetectorConfig& config, uint32_t level);
+  protected:
 
-    template <typename T>
-    T get_and_set_rosparam(std::string rosparam_name);
+    // Initialize the detector
+    std::unique_ptr<pcl_detector::IPclDetector> initialize_detector(std::string detector);
+  
+    /**
+     * @brief Use a no filter of pcl library
+     * @param msg Pointcloud2 message receveived from the ros2 node
+     * @return -
+     * @details Omit pointcloud filtering in this example
+     */
+    void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
 
-    float m_leaf_size;
-    std::string m_prefix = "/pcl_detector";
-    unsigned int m_seq{ 0 };
-    bool m_first_config = true;
+    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
 
-    std::unique_ptr<pcl_detector::IPclDetector> m_detector;
+ 
+    // ROS2 subscriber and related topic name
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
+    std::string param_topic_pointcloud_in_;
+    
+    // ROS2 publisher and related topic name 
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
+    std::string param_topic_pointcloud_out_;
+
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_callback_handle_;
+
+    std::unique_ptr<pcl_detector::IPclDetector> detector_;
+
+    bool parameters_changed_ = false;
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },
         { "euclidean", DetectorType::Euclidean },
-    };
-
-    std::unique_ptr<pcl_detector::IPclDetector> initialize_detector(std::string detector);
+    };  
 };
 
-#endif // PCL_DETECTOR_ROS_H
+} // namespace pcl_detector

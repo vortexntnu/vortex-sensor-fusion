@@ -3,10 +3,9 @@
  * @brief This file defines a DBSCAN detector that inherits from the IPclDetector interface.
  */
 
-#ifndef DBSCAN_DETECTOR_H
-#define DBSCAN_DETECTOR_H
+#pragma once
 
-#include "pcl_detector/pcl_detector.hpp"
+#include <pcl_detector/pcl_detector_interface.hpp>
 
 #include <pcl/common/centroid.h>
 #include <pcl/filters/extract_indices.h>
@@ -22,18 +21,16 @@ class DBSCANDetector : public IPclDetector {
 
 public:
     DBSCANDetector(float eps, int min_points)
-        : m_eps(eps)
-        , m_min_points(min_points)
+        : eps_(eps)
+        , min_points_(min_points)
     {
     }
 
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 
 private:
-    float m_eps;
-    int m_min_points;
+    float eps_;
+    size_t min_points_;
 };
 
 }; // namespace pcl_detector
-
-#endif // DBSCAN_DETECTOR_H

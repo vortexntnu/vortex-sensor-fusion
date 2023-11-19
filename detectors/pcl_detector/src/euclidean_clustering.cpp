@@ -1,11 +1,11 @@
-#include "pcl_detector/detectors/euclidean_clustering.hpp"
+#include <pcl_detector/detectors/euclidean_clustering.hpp>
 
 namespace pcl_detector {
 
 EuclideanClusteringDetector::EuclideanClusteringDetector(
     double cluster_tolerance, int min_cluster_size)
-    : m_cluster_tolerance{ cluster_tolerance }
-    , m_min_cluster_size{ min_cluster_size }
+    : cluster_tolerance_{ cluster_tolerance }
+    , min_cluster_size_{ min_cluster_size }
 {
 }
 
@@ -18,8 +18,8 @@ pcl::PointCloud<pcl::PointXYZ> EuclideanClusteringDetector::get_detections(const
 
     std::vector<pcl::PointIndices> cluster_indices;
     pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-    ec.setClusterTolerance(m_cluster_tolerance);
-    ec.setMinClusterSize(m_min_cluster_size);
+    ec.setClusterTolerance(cluster_tolerance_);
+    ec.setMinClusterSize(min_cluster_size_);
     ec.setMaxClusterSize(std::numeric_limits<int>::max());
     ec.setSearchMethod(tree);
     ec.setInputCloud(points.makeShared());

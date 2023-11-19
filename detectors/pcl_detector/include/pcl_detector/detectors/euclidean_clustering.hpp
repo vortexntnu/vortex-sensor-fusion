@@ -1,7 +1,6 @@
-#ifndef EUCLIDEAN_CLUSTERING_H
-#define EUCLIDEAN_CLUSTERING_H
+#pragma once
 
-#include "pcl_detector/pcl_detector.hpp"
+#include <pcl_detector/pcl_detector_interface.hpp>
 
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/point_cloud.h>
@@ -10,7 +9,7 @@
 
 namespace pcl_detector {
 
-class EuclideanClusteringDetector : public pcl_detector::IPclDetector {
+class EuclideanClusteringDetector : public IPclDetector {
 
 public:
     EuclideanClusteringDetector(double cluster_tolerance, int min_cluster_size);
@@ -18,10 +17,8 @@ public:
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
 
 private:
-    double m_cluster_tolerance;
-    int m_min_cluster_size;
+    double cluster_tolerance_;
+    int min_cluster_size_;
 };
 
 }; // namespace pcl_detector
-
-#endif // EEUCLIDEAN_CLUSTERING_H
