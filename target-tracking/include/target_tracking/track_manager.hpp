@@ -36,7 +36,11 @@ public:
 
     TrackManager() = default;
 
-    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval);
+    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold);
+
+    void deleteTracks(double deletion_threshold);
+
+    std::vector<Track> getTracks() const { return tracks_; }
 
 private:
     std::vector<Track> tracks_;

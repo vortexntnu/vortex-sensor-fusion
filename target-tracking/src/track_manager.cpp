@@ -9,7 +9,7 @@ TrackManager::TrackManager(double clutter_rate, double probability_of_detection,
     
 }
 
-void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval)
+void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold)
 {
     // Sorts the tracks based on existence probability and confirmed track
     std::sort(tracks_.begin(), tracks_.end());
@@ -32,19 +32,12 @@ void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int u
         
     }
 
-    double deletion_threshold = 0.2;
-    double confirmation_threshold = 0.8;
-
-    // Update confirmed tracks and delete unwanted tracks
+    // Update track existence
     for (auto &track : tracks_)
     {
         if (track.confirmed == false && track.existence_probability > confirmation_threshold)
         {
             track.confirmed = true;
-        }
-        else if (track.existence_probability < deletion_threshold)
-        {
-            tracks_.erase(std::remove(tracks_.begin(), tracks_.end(), track), tracks_.end());
         }
     }
 
@@ -66,4 +59,10 @@ void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int u
             // remove the point from the list of measurements
             measurements.erase(std::remove(measurements.begin(), measurements.end(), point), measurements.end());
         }
+}
+
+void TrackManager::deleteTracks(double deletion_threshold)
+{
+    // Delete tracks with existence probability below the deletion threshold
+    tracks_.erase(std::remove_if(tracks_.begin(), tracks_.end(), [deletion_threshold](const Track &track) { return track.existence_probability < deletion_threshold; }), tracks_.end());
 }

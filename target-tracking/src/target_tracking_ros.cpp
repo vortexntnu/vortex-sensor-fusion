@@ -9,29 +9,21 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
 {
     // Configure default topics for subscribing/publishing
     declare_parameter<std::string>("topic_pointcloud_in", "lidar/centroids");
-    declare_parameter<std::string>("topic_pointcloud_out", "target_tracking/position_estimate");
+    declare_parameter<std::string>("topic_pointcloud_out", "target_tracking/landmarks");
 
-    // Clutter rate
+ 
     declare_parameter<double>("clutter_rate", 1.0);
-    // Probability of detection
     declare_parameter<double>("probability_of_detection", 0.9);
-    // Gate threshold
     declare_parameter<double>("gate_threshold", 1.0);
 
-    // Track confirmation threshold
-    declare_parameter<double>("confirmation_threshold", 0.8);
-    // Track deletion threshold
+    declare_parameter<double>("confirmation_threshold", 0.4);
     declare_parameter<double>("deletion_threshold", 0.2);
 
-    // Std velocity parameter
     declare_parameter<double>("std_velocity", 0.1);
-    // Std sensor parameter
     declare_parameter<double>("std_sensor", 0.1); 
 
-    // Update inteval ms
     declare_parameter<int>("update_interval_ms", 500);
 
-    // World frame
     declare_parameter<std::string>("world_frame", "world_frame");
 
     // Read parameters for subscriber and publisher
@@ -47,7 +39,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         param_topic_pointcloud_in_, qos, std::bind(&TargetTrackingNode::topic_callback, this, _1));
     // Publish to topic
-    publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(param_topic_pointcloud_out_, qos);
+    publisher_ = this->create_publisher<vortex_msgs::msg::LandmarkArray>(param_topic_pointcloud_out_, qos);
 
     // Set timer
     int update_interval = get_parameter("update_interval_ms").as_int();
@@ -63,6 +55,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     double gate_threshold = get_parameter("gate_threshold").as_double();
     double std_velocity = get_parameter("std_velocity").as_double();
     double std_sensor = get_parameter("std_sensor").as_double();
+    
     track_manager_ = TrackManager(clutter_rate, probability_of_detection, gate_threshold, std_velocity, std_sensor);
 }
 
@@ -100,10 +93,6 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
 
             measurements_.push_back(point_2d);
         }
-
-        // Publishes the input pointcloud for testing
-        publisher_->publish(*centroids);
-
     } catch (tf2::TransformException &ex) {
         RCLCPP_WARN(this->get_logger(), "Could not transform point cloud: %s", ex.what());
     }
@@ -111,11 +100,73 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
 
 void TargetTrackingNode::timer_callback()
 {
-    // get update interval parameter
+    // get parameters
     int update_interval = get_parameter("update_interval_ms").as_int();
+    double confirmation_threshold = get_parameter("confirmation_threshold").as_double();
 
     // Update tracks
-    track_manager_.updateTracks(measurements_, update_interval);
+    track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold);
 
     measurements_.clear();
+
+    // Publish tracks
+    vortex_msgs::msg::LandmarkArray landmark_array;
+    for(const auto& track : track_manager_.getTracks())
+    {
+        vortex_msgs::msg::Landmark landmark;
+        if(track.state.mean()(2) > 0.0 || track.state.mean()(3) > 0.0){
+            landmark.landmark_type = "boat";
+        }
+        else{
+            landmark.landmark_type = "buoy";
+        }
+        landmark.id = track.id;
+        landmark.action = track.confirmed ? 1 : 0;
+        landmark.odom.header.frame_id = get_parameter("world_frame").as_string();
+        landmark.odom.header.stamp = this->get_clock()->now();
+
+        landmark.odom.pose.pose.position.x = track.state.mean()(0);
+        landmark.odom.pose.pose.position.y = track.state.mean()(1);
+        landmark.odom.pose.pose.position.z = 0.0;
+
+        landmark.odom.pose.covariance = {track.state.cov()(0,0), track.state.cov()(0,1), 0.0, 0.0, 0.0, 0.0,
+                                         track.state.cov()(1,0), track.state.cov()(1,1), 0.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 1e-9, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 1e-9, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 1e-9, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 0.0, 1e-9};
+
+
+        landmark.odom.pose.pose.orientation.x = 0.0;
+        landmark.odom.pose.pose.orientation.y = 0.0;
+        landmark.odom.pose.pose.orientation.z = 0.0;
+        landmark.odom.pose.pose.orientation.w = 1.0;
+
+        landmark.odom.child_frame_id = get_parameter("world_frame").as_string();
+
+        // landmark.odom.twist.twist.linear.x = track.state.mean()(2);
+        // landmark.odom.twist.twist.linear.y = track.state.mean()(3);
+        // landmark.odom.twist.twist.linear.z = 0.0;
+
+        // landmark.odom.twist.covariance = {track.state.cov()(2,2), track.state.cov()(2,3), 0.0, 0.0, 0.0, 0.0,
+        //                                    track.state.cov()(3,2), track.state.cov()(3,3), 0.0, 0.0, 0.0, 0.0,
+        //                                    0.0, 0.0, 1e-9, 0.0, 0.0, 0.0,
+        //                                    0.0, 0.0, 0.0, 1e-9, 0.0, 0.0,
+        //                                    0.0, 0.0, 0.0, 0.0, 1e-9, 0.0,
+        //                                    0.0, 0.0, 0.0, 0.0, 0.0, 1e-9};
+
+    
+        landmark_array.landmarks.push_back(landmark);
+    }
+
+
+
+    // delete tracks
+    double deletion_threshold = get_parameter("deletion_threshold").as_double();
+    track_manager_.deleteTracks(deletion_threshold);
+
+    publisher_->publish(landmark_array);
+
+    RCLCPP_INFO(this->get_logger(), "Published %lu tracks", landmark_array.landmarks.size());
+
 }
