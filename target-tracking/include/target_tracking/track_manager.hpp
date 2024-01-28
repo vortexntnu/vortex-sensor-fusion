@@ -32,11 +32,11 @@ struct Track {
 
 class TrackManager {
 public:
-    TrackManager(double clutter_rate, double probability_of_detection, double gate_threshold, double std_velocity, double std_sensor);
+    TrackManager(double std_velocity, double std_sensor);
 
     TrackManager() = default;
 
-    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold);
+    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double clutter_intensity);
 
     void deleteTracks(double deletion_threshold);
 

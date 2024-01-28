@@ -1,35 +1,38 @@
 #include <target_tracking/track_manager.hpp>
 
-TrackManager::TrackManager(double clutter_rate, double probability_of_detection, double gate_threshold, double std_velocity, double std_sensor)
+TrackManager::TrackManager(double std_velocity, double std_sensor)
 : dyn_model_(std::make_shared<DynMod>(std_velocity))
 , sensor_model_(std::make_shared<SensorMod>(std_sensor))
-, pdaf_(std::make_shared<PDAF>(gate_threshold, probability_of_detection, clutter_rate))
+, pdaf_()
 , tracker_id_(0)
 {
-    
+
 }
 
-void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold)
+void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double clutter_intensity)
 {
     // Sorts the tracks based on existence probability and confirmed track
     std::sort(tracks_.begin(), tracks_.end());
 
-    std::vector<Eigen::Vector2d> z_meas;
-
     for (auto &track : tracks_)
     {
         // Predict next state (PDAF)
-        auto [x_pred, inside, outside] = pdaf_->predict_next_state(track.state, z_meas, update_interval / 1000.0, dyn_model_, sensor_model_);
+        auto [x_final, inside, outside, x_pred, z_pred, x_updated] = pdaf_->predict_next_state(track.state, measurements, update_interval / 1000.0, dyn_model_, sensor_model_, gate_theshhold, prob_of_detection, clutter_intensity);
 
         // Update state
-        track.state = x_pred;
+        track.state = x_final;
 
         // Update the measurement list
         measurements = outside;
 
         // Update existence probability (IPDA)
-        
-        
+        if (inside.size() > 0)
+        {
+            track.existence_probability += 0.1; 
+        } else {
+            track.existence_probability -= 0.1;
+        }
+        // track.existence_probability = ipda_ -> update_existence_probability(track.existence_probability, inside.size(), outside.size(), prob_of_detection, clutter_intensity);
     }
 
     // Update track existence

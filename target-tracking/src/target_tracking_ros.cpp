@@ -16,11 +16,11 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("probability_of_detection", 0.9);
     declare_parameter<double>("gate_threshold", 1.0);
 
-    declare_parameter<double>("confirmation_threshold", 0.4);
+    declare_parameter<double>("confirmation_threshold", 0.6);
     declare_parameter<double>("deletion_threshold", 0.2);
 
-    declare_parameter<double>("std_velocity", 0.1);
-    declare_parameter<double>("std_sensor", 0.1); 
+    declare_parameter<double>("std_velocity", 0.05);
+    declare_parameter<double>("std_sensor", 0.05); 
 
     declare_parameter<int>("update_interval_ms", 500);
 
@@ -50,13 +50,10 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
     // Initialize track manager
-    double clutter_rate = get_parameter("clutter_rate").as_double();
-    double probability_of_detection = get_parameter("probability_of_detection").as_double();
-    double gate_threshold = get_parameter("gate_threshold").as_double();
     double std_velocity = get_parameter("std_velocity").as_double();
     double std_sensor = get_parameter("std_sensor").as_double();
-    
-    track_manager_ = TrackManager(clutter_rate, probability_of_detection, gate_threshold, std_velocity, std_sensor);
+
+    track_manager_ = TrackManager(std_velocity, std_sensor);
 }
 
 void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr centroids)
@@ -103,25 +100,36 @@ void TargetTrackingNode::timer_callback()
     // get parameters
     int update_interval = get_parameter("update_interval_ms").as_int();
     double confirmation_threshold = get_parameter("confirmation_threshold").as_double();
+    double gate_threshold = get_parameter("gate_threshold").as_double();
+    double prob_of_detection = get_parameter("probability_of_detection").as_double();
+    double clutter_intensity = get_parameter("clutter_rate").as_double();
+    double delete_threshold_ = get_parameter("deletion_threshold").as_double();
 
     // Update tracks
-    track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold);
+    track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold, gate_threshold, prob_of_detection, clutter_intensity);
 
     measurements_.clear();
 
     // Publish tracks
     vortex_msgs::msg::LandmarkArray landmark_array;
     for(const auto& track : track_manager_.getTracks())
-    {
+    {   
+        // Skips unconfirmed tracks
+        if(track.confirmed == false){
+            continue;
+        }
+
         vortex_msgs::msg::Landmark landmark;
-        if(track.state.mean()(2) > 0.0 || track.state.mean()(3) > 0.0){
-            landmark.landmark_type = "boat";
-        }
-        else{
-            landmark.landmark_type = "buoy";
-        }
+
+        // Sets landmark type
+        landmark.landmark_type = "boat";
+
+        int var = track.existence_probability < delete_threshold_ ? 0 : 1;
+
+        // creates landmark message
         landmark.id = track.id;
-        landmark.action = track.confirmed ? 1 : 0;
+        landmark.action = track.existence_probability < delete_threshold_ ? 0 : 1;
+        std::cout << "ID: " << track.id << "Action:" << var << std::endl;
         landmark.odom.header.frame_id = get_parameter("world_frame").as_string();
         landmark.odom.header.stamp = this->get_clock()->now();
 
@@ -131,11 +139,12 @@ void TargetTrackingNode::timer_callback()
 
         landmark.odom.pose.covariance = {track.state.cov()(0,0), track.state.cov()(0,1), 0.0, 0.0, 0.0, 0.0,
                                          track.state.cov()(1,0), track.state.cov()(1,1), 0.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.0, 1e-9, 0.0, 0.0, 0.0,
-                                         0.0, 0.0, 0.0, 1e-9, 0.0, 0.0,
-                                         0.0, 0.0, 0.0, 0.0, 1e-9, 0.0,
-                                         0.0, 0.0, 0.0, 0.0, 0.0, 1e-9};
+                                         0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
 
+        // std::cout << track.state.cov() << std::endl;
 
         landmark.odom.pose.pose.orientation.x = 0.0;
         landmark.odom.pose.pose.orientation.y = 0.0;
@@ -143,19 +152,6 @@ void TargetTrackingNode::timer_callback()
         landmark.odom.pose.pose.orientation.w = 1.0;
 
         landmark.odom.child_frame_id = get_parameter("world_frame").as_string();
-
-        // landmark.odom.twist.twist.linear.x = track.state.mean()(2);
-        // landmark.odom.twist.twist.linear.y = track.state.mean()(3);
-        // landmark.odom.twist.twist.linear.z = 0.0;
-
-        // landmark.odom.twist.covariance = {track.state.cov()(2,2), track.state.cov()(2,3), 0.0, 0.0, 0.0, 0.0,
-        //                                    track.state.cov()(3,2), track.state.cov()(3,3), 0.0, 0.0, 0.0, 0.0,
-        //                                    0.0, 0.0, 1e-9, 0.0, 0.0, 0.0,
-        //                                    0.0, 0.0, 0.0, 1e-9, 0.0, 0.0,
-        //                                    0.0, 0.0, 0.0, 0.0, 1e-9, 0.0,
-        //                                    0.0, 0.0, 0.0, 0.0, 0.0, 1e-9};
-
-    
         landmark_array.landmarks.push_back(landmark);
     }
 

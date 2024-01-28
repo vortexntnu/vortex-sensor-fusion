@@ -29,6 +29,8 @@ private:
 
     void timer_callback();
 
+    TrackManager initialize_track_manager();
+
     // List of 2d centroids
     mutable std::vector<Eigen::Vector2d> measurements_;
 
