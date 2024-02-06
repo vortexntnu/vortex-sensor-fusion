@@ -1,12 +1,9 @@
 #include <target_tracking/track_manager.hpp>
 
-TrackManager::TrackManager(double std_velocity, double std_sensor)
-: dyn_model_(std::make_shared<DynMod>(std_velocity))
-, sensor_model_(std::make_shared<SensorMod>(std_sensor))
-, pdaf_()
+TrackManager::TrackManager()
+: pdaf_()
 , tracker_id_(0)
 {
-
 }
 
 void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double clutter_intensity)
@@ -68,4 +65,14 @@ void TrackManager::deleteTracks(double deletion_threshold)
 {
     // Delete tracks with existence probability below the deletion threshold
     tracks_.erase(std::remove_if(tracks_.begin(), tracks_.end(), [deletion_threshold](const Track &track) { return track.existence_probability < deletion_threshold; }), tracks_.end());
+}
+
+void TrackManager::set_dyn_model(double std_velocity)
+{
+    dyn_model_ = std::make_shared<DynMod>(std_velocity);
+}
+
+void TrackManager::set_sensor_model(double std_measurement)
+{
+    sensor_model_ = std::make_shared<SensorMod>(std_measurement);
 }

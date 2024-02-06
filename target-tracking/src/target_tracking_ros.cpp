@@ -20,11 +20,16 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("deletion_threshold", 0.2);
 
     declare_parameter<double>("std_velocity", 0.05);
-    declare_parameter<double>("std_sensor", 0.05); 
+    declare_parameter<double>("std_sensor", 0.05);
 
     declare_parameter<int>("update_interval_ms", 500);
 
     declare_parameter<std::string>("world_frame", "world_frame");
+
+    // parameter_subscriber_ = this->create_subscription<rcl_interfaces::msg::ParameterEvent>(
+    //         "/parameter_events", 10, std::bind(&TargetTrackingNode::parameterCallback, this, std::placeholders::_1));
+
+    parameter_subscriber_ = add_on_set_parameters_callback(std::bind(&TargetTrackingNode::parametersCallback, this, std::placeholders::_1));
 
     // Read parameters for subscriber and publisher
     param_topic_pointcloud_in_ = get_parameter("topic_pointcloud_in").as_string();
@@ -53,7 +58,9 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     double std_velocity = get_parameter("std_velocity").as_double();
     double std_sensor = get_parameter("std_sensor").as_double();
 
-    track_manager_ = TrackManager(std_velocity, std_sensor);
+    track_manager_ = TrackManager();
+    track_manager_.set_dyn_model(std_velocity);
+    track_manager_.set_sensor_model(std_sensor);
 }
 
 void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr centroids)
@@ -83,6 +90,7 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
             centroid_point.point.y = *iter_y;
             centroid_point.point.z = 0.0;
             tf2::doTransform(centroid_point, transformed_point, transform_stamped);
+            // std::cout << track.state.cov() << std::endl;, transform_stamped);
 
             Eigen::Vector2d point_2d;
             point_2d[0] = transformed_point.point.x;
@@ -94,7 +102,30 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
         RCLCPP_WARN(this->get_logger(), "Could not transform point cloud: %s", ex.what());
     }
 }
+rcl_interfaces::msg::SetParametersResult TargetTrackingNode::parametersCallback(const std::vector<rclcpp::Parameter> &parameters)
+// void TargetTrackingNode::parameterCallback(const std::vector<rclcpp::Parameter>& parameters)
+{
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
 
+    for (const auto &parameter : parameters)
+    {
+        std::cout << "New parameter: " << parameter.get_name() << std::endl;
+        if (parameter.get_name() == "std_velocity")
+        {
+            update_dyn_model(parameter.as_double());
+        }
+        else if (parameter.get_name() == "std_sensor")
+        {
+            update_sensor_model(parameter.as_double());
+        } 
+        else if (parameter.get_name() == "update_interval_ms")
+        {
+            update_timer(parameter.as_int());
+        }
+    }
+    return result;
+}
 void TargetTrackingNode::timer_callback()
 {
     // get parameters
@@ -103,7 +134,7 @@ void TargetTrackingNode::timer_callback()
     double gate_threshold = get_parameter("gate_threshold").as_double();
     double prob_of_detection = get_parameter("probability_of_detection").as_double();
     double clutter_intensity = get_parameter("clutter_rate").as_double();
-    double delete_threshold_ = get_parameter("deletion_threshold").as_double();
+    double deletion_threshold = get_parameter("deletion_threshold").as_double();
 
     // Update tracks
     track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold, gate_threshold, prob_of_detection, clutter_intensity);
@@ -124,12 +155,9 @@ void TargetTrackingNode::timer_callback()
         // Sets landmark type
         landmark.landmark_type = "boat";
 
-        int var = track.existence_probability < delete_threshold_ ? 0 : 1;
-
         // creates landmark message
         landmark.id = track.id;
-        landmark.action = track.existence_probability < delete_threshold_ ? 0 : 1;
-        std::cout << "ID: " << track.id << "Action:" << var << std::endl;
+        landmark.action = track.existence_probability < deletion_threshold ? 0 : 1;
         landmark.odom.header.frame_id = get_parameter("world_frame").as_string();
         landmark.odom.header.stamp = this->get_clock()->now();
 
@@ -146,10 +174,21 @@ void TargetTrackingNode::timer_callback()
 
         // std::cout << track.state.cov() << std::endl;
 
+        double yaw_angle;
+
+        double vel_x = track.state.mean()(2);
+        double vel_y = track.state.mean()(3);
+
+        if (vel_x == 0) {
+            yaw_angle = vel_y > 0 ? M_PI / 2 : -M_PI / 2;
+        } else {
+            yaw_angle = std::atan2(vel_y, vel_x);
+        }
+
         landmark.odom.pose.pose.orientation.x = 0.0;
         landmark.odom.pose.pose.orientation.y = 0.0;
-        landmark.odom.pose.pose.orientation.z = 0.0;
-        landmark.odom.pose.pose.orientation.w = 1.0;
+        landmark.odom.pose.pose.orientation.z = std::sin(yaw_angle / 2);
+        landmark.odom.pose.pose.orientation.w = std::cos(yaw_angle / 2);
 
         landmark.odom.child_frame_id = get_parameter("world_frame").as_string();
         landmark_array.landmarks.push_back(landmark);
@@ -158,11 +197,29 @@ void TargetTrackingNode::timer_callback()
 
 
     // delete tracks
-    double deletion_threshold = get_parameter("deletion_threshold").as_double();
     track_manager_.deleteTracks(deletion_threshold);
 
     publisher_->publish(landmark_array);
 
     RCLCPP_INFO(this->get_logger(), "Published %lu tracks", landmark_array.landmarks.size());
 
+}
+
+void TargetTrackingNode::update_timer(int update_interval)
+{
+    timer_->cancel();
+    timer_ = this->create_wall_timer(std::chrono::milliseconds(update_interval), std::bind(&TargetTrackingNode::timer_callback, this));
+    RCLCPP_INFO(this->get_logger(), "Updated timer with %d ms update interval", update_interval);
+}
+
+void TargetTrackingNode::update_dyn_model(double std_velocity)
+{
+    track_manager_.set_dyn_model(std_velocity);
+    RCLCPP_INFO(this->get_logger(), "Updated dynamic model");
+}
+
+void TargetTrackingNode::update_sensor_model(double std_measurement)
+{
+    track_manager_.set_sensor_model(std_measurement);
+    RCLCPP_INFO(this->get_logger(), "Updated sensor model");
 }

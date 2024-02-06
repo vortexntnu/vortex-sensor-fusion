@@ -15,6 +15,8 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/buffer.h>
 
+#include <cmath>
+
 #include <target_tracking/track_manager.hpp>
 
 class TargetTrackingNode : public rclcpp::Node
@@ -29,7 +31,14 @@ private:
 
     void timer_callback();
 
-    TrackManager initialize_track_manager();
+    void update_dyn_model(double std_velocity);
+
+    void update_sensor_model(double std_sensor);
+
+    void update_timer(int update_interval);
+
+    // void parameterCallback(const std::vector<rclcpp::Parameter> &parameters);
+    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
 
     // List of 2d centroids
     mutable std::vector<Eigen::Vector2d> measurements_;
@@ -46,6 +55,10 @@ private:
     std::string param_topic_pointcloud_out_;
 
     rclcpp::TimerBase::SharedPtr timer_;
+
+    // Parameter subscriber
+    // rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_subscriber_;
+    rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_subscriber_;
 
     // Transform listener
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
