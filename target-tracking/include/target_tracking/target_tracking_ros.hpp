@@ -19,28 +19,71 @@
 
 #include <target_tracking/track_manager.hpp>
 
-class TargetTrackingNode : public rclcpp::Node
-{
+class TargetTrackingNode : public rclcpp::Node {
 public:
+    /**
+     * @brief Constructor for TargetTrackingNode.
+     * 
+     * @param options The node options.
+     */
     explicit TargetTrackingNode(const rclcpp::NodeOptions &options = rclcpp::NodeOptions());
 
+    /**
+     * @brief Destructor for TargetTrackingNode.
+     */
     ~TargetTrackingNode() {};
     
 private:
+    /**
+     * @brief Callback function for the topic subscription.
+     * 
+     * @param centroids The received point cloud data.
+     */
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr centroids);
 
+    /**
+     * @brief Timer callback function.
+     */
     void timer_callback();
 
+    /**
+     * @brief Publishes the landmarks to the output topic.
+     * 
+     * @param deletion_threshold The deletion threshold for the landmarks.
+     */
+    void publish_landmarks(double deletion_threshold);
+
+    /**
+     * @brief Updates the dynamic model with the given velocity standard deviation.
+     * 
+     * @param std_velocity The velocity standard deviation.
+     */
     void update_dyn_model(double std_velocity);
 
+    /**
+     * @brief Updates the sensor model with the given sensor standard deviation.
+     * 
+     * @param std_sensor The sensor standard deviation.
+     */
     void update_sensor_model(double std_sensor);
 
+    /**
+     * @brief Updates the update interval for the target tracking.
+     * 
+     * @param update_interval The new update interval in milliseconds.
+     */
     void update_timer(int update_interval);
 
-    // void parameterCallback(const std::vector<rclcpp::Parameter> &parameters);
+    /**
+     * @brief Callback function for handling parameter updates.
+     * 
+     * @param parameters The updated parameters.
+     * @return The result of setting the parameters.
+     */
+
     rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
 
-    // List of 2d centroids
+    // List of 2D centroids
     mutable std::vector<Eigen::Vector2d> measurements_;
 
     // Track manager
@@ -57,7 +100,6 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
 
     // Parameter subscriber
-    // rclcpp::Subscription<rcl_interfaces::msg::ParameterEvent>::SharedPtr parameter_subscriber_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_subscriber_;
 
     // Transform listener

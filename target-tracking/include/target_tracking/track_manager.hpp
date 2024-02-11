@@ -32,27 +32,66 @@ struct Track {
 
 class TrackManager {
 public:
+
+    /**
+     * @brief Default constructor for the TrackManager class.
+     */
     TrackManager();
 
+    /**
+     * @brief Updates the tracks based on the measurements received from the sensor.
+     * 
+     * @param measurements_ The measurements received from the sensor.
+     * @param update_interval The time interval between updates.
+     * @param confirmation_threshold The threshold for confirming a track.
+     * @param gate_theshhold The threshold for gating measurements.
+     * @param prob_of_detection The probability of detection.
+     * @param prob_of_survival The probability of survival.
+     * @param clutter_intensity The intensity of clutter.
+     */
     void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double prob_of_survival, double clutter_intensity);
 
+    /**
+     * @brief Creates new tracks for every measurements.
+     * 
+     * @param measurements The measurements received.
+     */
+    void createTracks(std::vector<Eigen::Vector2d> measurements);
+
+    /**
+     * @brief Deletes tracks that have a low probability of existence.
+     * 
+     * @param deletion_threshold The threshold for deleting a track.
+     */
     void deleteTracks(double deletion_threshold);
 
+    /**
+     * @brief Sets the dynamic model for estimating target motion.
+     * 
+     * @param std_velocity The standard deviation of the target velocity.
+     */
     void set_dyn_model(double std_velocity);
 
+    /**
+     * @brief Sets the sensor model for estimating target measurements.
+     * 
+     * @param std_measurement The standard deviation of the target measurement.
+     */
     void set_sensor_model(double std_measurement);
 
+    /**
+     * @brief Retrieves the current tracks.
+     * 
+     * @return A vector of Track objects representing the current tracks.
+     */
     std::vector<Track> getTracks() const { return tracks_; }
 
 private:
-    std::vector<Track> tracks_;
+    std::vector<Track> tracks_; ///< The vector of tracks.
 
-    // Dynamic model
-    std::shared_ptr<DynMod> dyn_model_;
+    std::shared_ptr<DynMod> dyn_model_; ///< The dynamic model for estimating target motion.
 
-    // Sensor model
-    std::shared_ptr<SensorMod> sensor_model_;
+    std::shared_ptr<SensorMod> sensor_model_; ///< The sensor model for estimating target measurements.
 
-    // Tracker id
-    int tracker_id_;
+    int tracker_id_; ///< The tracker id.
 };

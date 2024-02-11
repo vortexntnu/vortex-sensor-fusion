@@ -15,7 +15,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("clutter_rate", 0.1);
     declare_parameter<double>("probability_of_detection", 0.9);
     declare_parameter<double>("probability_of_survival", 0.99);
-    declare_parameter<double>("gate_threshold", 1.0);
+    declare_parameter<double>("gate_threshold", 1.5);
 
     declare_parameter<double>("confirmation_threshold", 0.7);
     declare_parameter<double>("deletion_threshold", 0.1);
@@ -27,9 +27,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
 
     declare_parameter<std::string>("world_frame", "world_frame");
 
-    // parameter_subscriber_ = this->create_subscription<rcl_interfaces::msg::ParameterEvent>(
-    //         "/parameter_events", 10, std::bind(&TargetTrackingNode::parameterCallback, this, std::placeholders::_1));
-
+    // Set parameter callback
     parameter_subscriber_ = add_on_set_parameters_callback(std::bind(&TargetTrackingNode::parametersCallback, this, std::placeholders::_1));
 
     // Read parameters for subscriber and publisher
@@ -44,6 +42,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     // Subscribe to topic
     subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
         param_topic_pointcloud_in_, qos, std::bind(&TargetTrackingNode::topic_callback, this, _1));
+
     // Publish to topic
     publisher_ = this->create_publisher<vortex_msgs::msg::LandmarkArray>(param_topic_pointcloud_out_, qos);
 
@@ -104,14 +103,12 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
     }
 }
 rcl_interfaces::msg::SetParametersResult TargetTrackingNode::parametersCallback(const std::vector<rclcpp::Parameter> &parameters)
-// void TargetTrackingNode::parameterCallback(const std::vector<rclcpp::Parameter>& parameters)
 {
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
 
     for (const auto &parameter : parameters)
     {
-        std::cout << "New parameter: " << parameter.get_name() << std::endl;
         if (parameter.get_name() == "std_velocity")
         {
             update_dyn_model(parameter.as_double());
@@ -144,6 +141,13 @@ void TargetTrackingNode::timer_callback()
     measurements_.clear();
 
     // Publish tracks
+    publish_landmarks(deletion_threshold);
+
+    // delete tracks
+    track_manager_.deleteTracks(deletion_threshold);
+}
+
+void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
     vortex_msgs::msg::LandmarkArray landmark_array;
     for(const auto& track : track_manager_.getTracks())
     {   
@@ -174,8 +178,6 @@ void TargetTrackingNode::timer_callback()
                                          0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
                                          0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
 
-        // std::cout << track.state.cov() << std::endl;
-
         double yaw_angle;
 
         double vel_x = track.state.mean()(2);
@@ -196,15 +198,9 @@ void TargetTrackingNode::timer_callback()
         landmark_array.landmarks.push_back(landmark);
     }
 
-
-
-    // delete tracks
-    track_manager_.deleteTracks(deletion_threshold);
-
     publisher_->publish(landmark_array);
 
     RCLCPP_INFO(this->get_logger(), "Published %lu tracks", landmark_array.landmarks.size());
-
 }
 
 void TargetTrackingNode::update_timer(int update_interval)
