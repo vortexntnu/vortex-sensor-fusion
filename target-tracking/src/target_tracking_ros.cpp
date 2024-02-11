@@ -12,15 +12,16 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     declare_parameter<std::string>("topic_pointcloud_out", "target_tracking/landmarks");
 
  
-    declare_parameter<double>("clutter_rate", 1.0);
+    declare_parameter<double>("clutter_rate", 0.1);
     declare_parameter<double>("probability_of_detection", 0.9);
+    declare_parameter<double>("probability_of_survival", 0.99);
     declare_parameter<double>("gate_threshold", 1.0);
 
-    declare_parameter<double>("confirmation_threshold", 0.6);
-    declare_parameter<double>("deletion_threshold", 0.2);
+    declare_parameter<double>("confirmation_threshold", 0.7);
+    declare_parameter<double>("deletion_threshold", 0.1);
 
     declare_parameter<double>("std_velocity", 0.05);
-    declare_parameter<double>("std_sensor", 0.05);
+    declare_parameter<double>("std_sensor", 0.5);
 
     declare_parameter<int>("update_interval_ms", 500);
 
@@ -133,11 +134,12 @@ void TargetTrackingNode::timer_callback()
     double confirmation_threshold = get_parameter("confirmation_threshold").as_double();
     double gate_threshold = get_parameter("gate_threshold").as_double();
     double prob_of_detection = get_parameter("probability_of_detection").as_double();
+    double prob_of_survival = get_parameter("probability_of_survival").as_double();
     double clutter_intensity = get_parameter("clutter_rate").as_double();
     double deletion_threshold = get_parameter("deletion_threshold").as_double();
 
     // Update tracks
-    track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold, gate_threshold, prob_of_detection, clutter_intensity);
+    track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold, gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity);
 
     measurements_.clear();
 

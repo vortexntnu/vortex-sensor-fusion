@@ -1,20 +1,19 @@
 #include <target_tracking/track_manager.hpp>
 
 TrackManager::TrackManager()
-: pdaf_()
-, tracker_id_(0)
+: tracker_id_(0)
 {
 }
 
-void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double clutter_intensity)
+void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double prob_of_survival, double clutter_intensity)
 {
     // Sorts the tracks based on existence probability and confirmed track
     std::sort(tracks_.begin(), tracks_.end());
-
+    std::cout << "tracks size: " << tracks_.size() << std::endl;
     for (auto &track : tracks_)
     {
         // Predict next state (PDAF)
-        auto [x_final, inside, outside, x_pred, z_pred, x_updated] = pdaf_->predict_next_state(track.state, measurements, update_interval / 1000.0, dyn_model_, sensor_model_, gate_theshhold, prob_of_detection, clutter_intensity);
+        auto [x_final, existence_probability, inside, outside, x_pred, z_pred, x_updated] = IPDA::step(track.state, measurements, update_interval / 1000.0, dyn_model_, sensor_model_, gate_theshhold, prob_of_detection, prob_of_survival, track.existence_probability, clutter_intensity);
 
         // Update state
         track.state = x_final;
@@ -23,13 +22,9 @@ void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int u
         measurements = outside;
 
         // Update existence probability (IPDA)
-        if (inside.size() > 0)
-        {
-            track.existence_probability += 0.1; 
-        } else {
-            track.existence_probability -= 0.1;
-        }
-        // track.existence_probability = ipda_ -> update_existence_probability(track.existence_probability, inside.size(), outside.size(), prob_of_detection, clutter_intensity);
+        track.existence_probability = existence_probability;
+
+        std::cout << "existence probabilities" << existence_probability << std::endl;
     }
 
     // Update track existence

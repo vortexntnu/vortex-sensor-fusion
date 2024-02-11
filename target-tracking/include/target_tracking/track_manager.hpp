@@ -3,12 +3,12 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <vortex_filtering/vortex_filtering.hpp>
-#include <vortex_filtering/filters/pdaf.hpp>
+#include <vortex_filtering/filters/ipda.hpp>
 
 using State4d = vortex::prob::Gauss4d;
 using DynMod = vortex::models::ConstantVelocity<2>;
 using SensorMod = vortex::models::IdentitySensorModel<4, 2>;
-using PDAF = vortex::filter::PDAF<vortex::models::ConstantVelocity<2>, vortex::models::IdentitySensorModel<4, 2>>;
+using IPDA = vortex::filter::IPDA<DynMod, SensorMod>;
 
 struct Track {
     int id;
@@ -34,7 +34,7 @@ class TrackManager {
 public:
     TrackManager();
 
-    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double clutter_intensity);
+    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double prob_of_survival, double clutter_intensity);
 
     void deleteTracks(double deletion_threshold);
 
@@ -52,9 +52,6 @@ private:
 
     // Sensor model
     std::shared_ptr<SensorMod> sensor_model_;
-
-    // PDAF filter
-    std::shared_ptr<PDAF> pdaf_;
 
     // Tracker id
     int tracker_id_;
