@@ -6,6 +6,7 @@
 #include <vortex_filtering/filters/ipda.hpp>
 
 using State4d = vortex::prob::Gauss4d;
+using State2d = vortex::prob::Gauss<2>;
 using DynMod = vortex::models::ConstantVelocity<2>;
 using SensorMod = vortex::models::IdentitySensorModel<4, 2>;
 using IPDA = vortex::filter::IPDA<DynMod, SensorMod>;
@@ -30,6 +31,14 @@ struct Track {
     }
 };
 
+struct stepResult {
+    State4d x_final;
+    double existence_probability;
+    std::vector<Eigen::Vector2d> inside;
+    State4d x_prediction;
+    State2d z_prediction;
+};
+
 class TrackManager {
 public:
 
@@ -49,7 +58,7 @@ public:
      * @param prob_of_survival The probability of survival.
      * @param clutter_intensity The intensity of clutter.
      */
-    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double prob_of_survival, double clutter_intensity);
+    std::vector<stepResult> updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double prob_of_survival, double clutter_intensity);
 
     /**
      * @brief Creates new tracks for every measurements.

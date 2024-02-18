@@ -11,6 +11,8 @@
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <vortex_msgs/msg/landmark.hpp>
 #include <vortex_msgs/msg/landmark_array.hpp>
+#include <vortex_msgs/msg/visualization_data.hpp>
+#include <vortex_msgs/msg/visualization_data_array.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/buffer.h>
@@ -54,6 +56,13 @@ private:
     void publish_landmarks(double deletion_threshold);
 
     /**
+     * @brief Publishes the visualization data to the output topic.
+     * 
+     * @param results The results of the update step in IPDA.
+     */
+    void publish_visualization_data(std::vector<stepResult> &results);
+
+    /**
      * @brief Updates the dynamic model with the given velocity standard deviation.
      * 
      * @param std_velocity The velocity standard deviation.
@@ -89,13 +98,17 @@ private:
     // Track manager
     TrackManager track_manager_;
 
-    // ROS2 subscriber and related topic name
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
+    // Pointcloud subscriber
+    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscriber_;
     std::string param_topic_pointcloud_in_;
     
-    // ROS2 publisher and related topic name 
-    rclcpp::Publisher<vortex_msgs::msg::LandmarkArray>::SharedPtr publisher_;
+    // Landmark publisher
+    rclcpp::Publisher<vortex_msgs::msg::LandmarkArray>::SharedPtr landmark_publisher_;
     std::string param_topic_pointcloud_out_;
+
+    // visualization publisher
+    rclcpp::Publisher<vortex_msgs::msg::VisualizationDataArray>::SharedPtr visualization_publisher_;
+    std::string param_topic_visualization_;
 
     rclcpp::TimerBase::SharedPtr timer_;
 

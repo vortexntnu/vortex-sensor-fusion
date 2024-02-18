@@ -5,15 +5,26 @@ TrackManager::TrackManager()
 {
 }
 
-void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double prob_of_survival, double clutter_intensity)
+std::vector<stepResult> TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double prob_of_survival, double clutter_intensity)
 {
     // Sorts the tracks based on existence probability and confirmed track
     std::sort(tracks_.begin(), tracks_.end());
     std::cout << "tracks size: " << tracks_.size() << std::endl;
+    
+    std::vector<stepResult> results;
+    
     for (auto &track : tracks_)
     {
         // Predict next state
         auto [x_final, existence_probability, inside, outside, x_pred, z_pred, x_updated] = IPDA::step(track.state, measurements, update_interval / 1000.0, dyn_model_, sensor_model_, gate_theshhold, prob_of_detection, prob_of_survival, track.existence_probability, clutter_intensity);
+
+        stepResult result;
+        result.x_final = x_final;
+        result.existence_probability = existence_probability;
+        result.inside = inside;
+        result.x_prediction = x_pred;
+        result.z_prediction = z_pred;
+        results.push_back(result);
 
         // Update state
         track.state = x_final;
@@ -25,6 +36,8 @@ void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int u
 
         // Update the measurement list
         measurements = outside;
+
+        return results;
     }
 
     // Update track existence
