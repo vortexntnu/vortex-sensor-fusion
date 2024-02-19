@@ -217,6 +217,9 @@ void TargetTrackingNode::publish_visualization_data(std::vector<stepResult> &res
 
     for (const auto &result : results)
     {
+        if (result.confirmed == false) {
+            continue;
+        }
         vortex_msgs::msg::VisualizationData step_result;
 
         // x_final
@@ -226,13 +229,16 @@ void TargetTrackingNode::publish_visualization_data(std::vector<stepResult> &res
         step_result.x_final.v_x = result.x_final.mean()(2);
         step_result.x_final.v_y = result.x_final.mean()(3);
 
-        step_result.x_final.covariance = {result.x_final.cov()(0,0), result.x_final.cov()(0,1), 0.0, 0.0, 0.0, 0.0,
-                                         result.x_final.cov()(1,0), result.x_final.cov()(1,1), 0.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.0, 1};
+        step_result.x_final.covariance = {result.x_final.cov()(0,0), result.x_final.cov()(0,1), 0.0, 0.0,
+                                            result.x_final.cov()(1,0), result.x_final.cov()(1,1), 0.0, 0.0,
+                                            0.0, 0.0, 1.0, 0.0,
+                                            0.0, 0.0, 0.0, 1.0};
 
         // existence_probability
         step_result.existence_probability = result.existence_probability;
 
+        // gate_theshhold
+        step_result.gate_threshold = get_parameter("gate_threshold").as_double();
 
         // inside
         for (const auto &point : result.inside)
@@ -244,6 +250,16 @@ void TargetTrackingNode::publish_visualization_data(std::vector<stepResult> &res
             step_result.inside.push_back(point_msg);
         }
 
+        // Previous positions
+        for (const auto &point : result.previous)
+        {
+            geometry_msgs::msg::Point point_msg;
+            point_msg.x = point(0);
+            point_msg.y = point(1);
+            point_msg.z = 0.0;
+            step_result.previous.push_back(point_msg);
+        }
+
         // x_prediction
         step_result.x_prediction.x = result.x_prediction.mean()(0);
         step_result.x_prediction.y = result.x_prediction.mean()(1);
@@ -251,10 +267,10 @@ void TargetTrackingNode::publish_visualization_data(std::vector<stepResult> &res
         step_result.x_prediction.v_x = result.x_prediction.mean()(2);
         step_result.x_prediction.v_y = result.x_prediction.mean()(3);
 
-        step_result.x_prediction.covariance = {result.x_prediction.cov()(0,0), result.x_prediction.cov()(0,1), 0.0, 0.0, 0.0, 0.0,
-                                         result.x_prediction.cov()(1,0), result.x_prediction.cov()(1,1), 0.0, 0.0, 0.0, 0.0,
-                                         0.0, 0.0, 1};
-
+        step_result.x_prediction.covariance = {result.x_prediction.cov()(0,0), result.x_prediction.cov()(0,1), 0.0, 0.0,
+                                            result.x_prediction.cov()(1,0), result.x_prediction.cov()(1,1), 0.0, 0.0,
+                                            0.0, 0.0, 1.0, 0.0,
+                                            0.0, 0.0, 0.0, 1.0};
         // z_prediction
         step_result.z_prediction.x = result.z_prediction.mean()(0);
         step_result.z_prediction.y = result.z_prediction.mean()(1);

@@ -17,14 +17,9 @@ std::vector<stepResult> TrackManager::updateTracks(std::vector<Eigen::Vector2d> 
     {
         // Predict next state
         auto [x_final, existence_probability, inside, outside, x_pred, z_pred, x_updated] = IPDA::step(track.state, measurements, update_interval / 1000.0, dyn_model_, sensor_model_, gate_theshhold, prob_of_detection, prob_of_survival, track.existence_probability, clutter_intensity);
-
-        stepResult result;
-        result.x_final = x_final;
-        result.existence_probability = existence_probability;
-        result.inside = inside;
-        result.x_prediction = x_pred;
-        result.z_prediction = z_pred;
-        results.push_back(result);
+        
+        // Add previous positions
+        track.previous.push_back(track.state.mean().head(2));
 
         // Update state
         track.state = x_final;
@@ -34,24 +29,31 @@ std::vector<stepResult> TrackManager::updateTracks(std::vector<Eigen::Vector2d> 
 
         std::cout << "existence probabilities" << existence_probability << std::endl;
 
-        // Update the measurement list
-        measurements = outside;
-
-        return results;
-    }
-
-    // Update track existence
-    for (auto &track : tracks_)
-    {
-        if (track.confirmed == false && track.existence_probability > confirmation_threshold)
+        // Update track existence
+        if (track.confirmed == false && existence_probability > confirmation_threshold)
         {
             track.confirmed = true;
         }
+
+        // Update the measurement list
+        measurements = outside;
+
+        // Result for visualization
+        stepResult result;
+        result.x_final = x_final;
+        result.existence_probability = existence_probability;
+        result.confirmed = track.confirmed;
+        result.inside = inside;
+        result.previous = track.previous;
+        result.x_prediction = x_pred;
+        result.z_prediction = z_pred;
+        results.push_back(result);
     }
 
     // Create new tracks based on the remaining measurements
     createTracks(measurements);
 
+    return results;
 }
 
 void TrackManager::createTracks(std::vector<Eigen::Vector2d> measurements)
