@@ -202,6 +202,16 @@ void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
         landmark.odom.pose.pose.orientation.z = std::sin(yaw_angle / 2);
         landmark.odom.pose.pose.orientation.w = std::cos(yaw_angle / 2);
 
+        landmark.odom.twist.twist.linear.x = track.state.mean()(2);
+        landmark.odom.twist.twist.linear.y = track.state.mean()(3);
+
+        landmark.odom.twist.covariance = {track.state.cov()(2,2), track.state.cov()(2,3), 0.0, 0.0, 0.0, 0.0,
+                                         track.state.cov()(3,2), track.state.cov()(3,3), 0.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 1.0 , 0.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                                         0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
+
         landmark.odom.child_frame_id = get_parameter("world_frame").as_string();
         landmark_array.landmarks.push_back(landmark);
     }
