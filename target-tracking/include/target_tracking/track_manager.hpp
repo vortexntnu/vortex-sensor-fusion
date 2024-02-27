@@ -33,15 +33,6 @@ struct Track {
     }
 };
 
-struct stepResult {
-    State4d x_final;
-    double existence_probability;
-    bool confirmed;
-    std::vector<Eigen::Vector2d> inside;
-    std::vector<Eigen::Vector2d> previous;
-    State4d x_prediction;
-    State2d z_prediction;
-};
 
 class TrackManager {
 public:
@@ -62,7 +53,7 @@ public:
      * @param prob_of_survival The probability of survival.
      * @param clutter_intensity The intensity of clutter.
      */
-    std::vector<stepResult> updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double prob_of_detection, double prob_of_survival, double clutter_intensity);
+    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double min_gate_threshold, double max_gate_threshold, double prob_of_detection, double prob_of_survival, double clutter_intensity);
 
     /**
      * @brief Creates new tracks for every measurements.

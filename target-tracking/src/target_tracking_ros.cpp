@@ -10,13 +10,14 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     // Configure default topics for subscribing/publishing
     declare_parameter<std::string>("topic_pointcloud_in", "lidar/centroids");
     declare_parameter<std::string>("topic_pointcloud_out", "target_tracking/landmarks");
-    declare_parameter<std::string>("topic_visualization_out", "target_tracking/visualization");
-
  
-    declare_parameter<double>("clutter_rate", 0.1);
-    declare_parameter<double>("probability_of_detection", 0.9);
+    declare_parameter<double>("clutter_rate", 0.001);
+    declare_parameter<double>("probability_of_detection", 0.75);
     declare_parameter<double>("probability_of_survival", 0.99);
     declare_parameter<double>("gate_threshold", 1.5);
+
+    declare_parameter<double>("min_gate_threshold", 1.0);
+    declare_parameter<double>("max_gate_threshold", 2.0);
 
     declare_parameter<double>("confirmation_threshold", 0.7);
     declare_parameter<double>("deletion_threshold", 0.1);
@@ -46,9 +47,6 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
 
     // Publish landmarks
     landmark_publisher_ = this->create_publisher<vortex_msgs::msg::LandmarkArray>(param_topic_pointcloud_out_, qos);
-
-    // visualization publisher
-    visualization_publisher_ = this->create_publisher<vortex_msgs::msg::VisualizationDataArray>("target_tracking/visualization", qos);
 
     // Set timer
     int update_interval = get_parameter("update_interval_ms").as_int();
@@ -134,22 +132,22 @@ void TargetTrackingNode::timer_callback()
     int update_interval = get_parameter("update_interval_ms").as_int();
     double confirmation_threshold = get_parameter("confirmation_threshold").as_double();
     double gate_threshold = get_parameter("gate_threshold").as_double();
+    double min_gate_threshold = get_parameter("min_gate_threshold").as_double();
+    double max_gate_threshold = get_parameter("max_gate_threshold").as_double();
     double prob_of_detection = get_parameter("probability_of_detection").as_double();
     double prob_of_survival = get_parameter("probability_of_survival").as_double();
     double clutter_intensity = get_parameter("clutter_rate").as_double();
     double deletion_threshold = get_parameter("deletion_threshold").as_double();
 
     // Update tracks
-    std::vector<stepResult> results;
-    results = track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold, gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity);
+    track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold, gate_threshold, min_gate_threshold, max_gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity);
 
     measurements_.clear();
 
     // Publish tracks to landmark server
     publish_landmarks(deletion_threshold);
 
-    // Publish visualization data
-    publish_visualization_data(results);
+    // Publish visualization parameters
 
     // delete tracks
     track_manager_.deleteTracks(deletion_threshold);
@@ -220,79 +218,6 @@ void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
 
     RCLCPP_INFO(this->get_logger(), "Published %lu tracks", landmark_array.landmarks.size());
 }
-
-void TargetTrackingNode::publish_visualization_data(std::vector<stepResult> &results)
-{
-    vortex_msgs::msg::VisualizationDataArray visualization_data_array;
-
-    for (const auto &result : results)
-    {
-        if (result.confirmed == false) {
-            continue;
-        }
-        vortex_msgs::msg::VisualizationData step_result;
-
-        // x_final
-        step_result.x_final.x = result.x_final.mean()(0);
-        step_result.x_final.y = result.x_final.mean()(1);
-
-        step_result.x_final.v_x = result.x_final.mean()(2);
-        step_result.x_final.v_y = result.x_final.mean()(3);
-
-        step_result.x_final.covariance = {result.x_final.cov()(0,0), result.x_final.cov()(0,1), 0.0, 0.0,
-                                            result.x_final.cov()(1,0), result.x_final.cov()(1,1), 0.0, 0.0,
-                                            0.0, 0.0, 1.0, 0.0,
-                                            0.0, 0.0, 0.0, 1.0};
-
-        // existence_probability
-        step_result.existence_probability = result.existence_probability;
-
-        // gate_theshhold
-        step_result.gate_threshold = get_parameter("gate_threshold").as_double();
-
-        // inside
-        for (const auto &point : result.inside)
-        {
-            geometry_msgs::msg::Point point_msg;
-            point_msg.x = point(0);
-            point_msg.y = point(1);
-            point_msg.z = 0.0;
-            step_result.inside.push_back(point_msg);
-        }
-
-        // Previous positions
-        for (const auto &point : result.previous)
-        {
-            geometry_msgs::msg::Point point_msg;
-            point_msg.x = point(0);
-            point_msg.y = point(1);
-            point_msg.z = 0.0;
-            step_result.previous.push_back(point_msg);
-        }
-
-        // x_prediction
-        step_result.x_prediction.x = result.x_prediction.mean()(0);
-        step_result.x_prediction.y = result.x_prediction.mean()(1);
-
-        step_result.x_prediction.v_x = result.x_prediction.mean()(2);
-        step_result.x_prediction.v_y = result.x_prediction.mean()(3);
-
-        step_result.x_prediction.covariance = {result.x_prediction.cov()(0,0), result.x_prediction.cov()(0,1), 0.0, 0.0,
-                                            result.x_prediction.cov()(1,0), result.x_prediction.cov()(1,1), 0.0, 0.0,
-                                            0.0, 0.0, 1.0, 0.0,
-                                            0.0, 0.0, 0.0, 1.0};
-        // z_prediction
-        step_result.z_prediction.x = result.z_prediction.mean()(0);
-        step_result.z_prediction.y = result.z_prediction.mean()(1);
-
-        step_result.z_prediction.covariance = {result.z_prediction.cov()(0,0), result.z_prediction.cov()(0,1),
-                                         result.z_prediction.cov()(1,0), result.z_prediction.cov()(1,1)};
-
-        visualization_data_array.visualization_data.push_back(step_result);
-    }
-
-    visualization_publisher_->publish(visualization_data_array);
-};
 
 void TargetTrackingNode::update_timer(int update_interval)
 {

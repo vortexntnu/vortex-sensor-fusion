@@ -56,13 +56,6 @@ private:
     void publish_landmarks(double deletion_threshold);
 
     /**
-     * @brief Publishes the visualization data to the output topic.
-     * 
-     * @param results The results of the update step in IPDA.
-     */
-    void publish_visualization_data(std::vector<stepResult> &results);
-
-    /**
      * @brief Updates the dynamic model with the given velocity standard deviation.
      * 
      * @param std_velocity The velocity standard deviation.
@@ -105,10 +98,6 @@ private:
     // Landmark publisher
     rclcpp::Publisher<vortex_msgs::msg::LandmarkArray>::SharedPtr landmark_publisher_;
     std::string param_topic_pointcloud_out_;
-
-    // visualization publisher
-    rclcpp::Publisher<vortex_msgs::msg::VisualizationDataArray>::SharedPtr visualization_publisher_;
-    std::string param_topic_visualization_;
 
     rclcpp::TimerBase::SharedPtr timer_;
 
