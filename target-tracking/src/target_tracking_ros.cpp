@@ -9,32 +9,32 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
 {
     // Configure default topics for subscribing/publishing
     declare_parameter<std::string>("topic_pointcloud_in", "lidar/centroids");
-    declare_parameter<std::string>("topic_pointcloud_out", "target_tracking/landmarks");
+    declare_parameter<std::string>("topic_landmarks_out", "target_tracking/landmarks");
+    declare_parameter<std::string>("topic_visualization_parameters", "target_tracking/parameters");
  
     declare_parameter<double>("clutter_rate", 0.001);
     declare_parameter<double>("probability_of_detection", 0.75);
     declare_parameter<double>("probability_of_survival", 0.99);
     declare_parameter<double>("gate_threshold", 1.5);
-
     declare_parameter<double>("min_gate_threshold", 1.0);
     declare_parameter<double>("max_gate_threshold", 2.0);
-
     declare_parameter<double>("confirmation_threshold", 0.7);
     declare_parameter<double>("deletion_threshold", 0.1);
-
     declare_parameter<double>("std_velocity", 0.2);
     declare_parameter<double>("std_sensor", 0.5);
 
     declare_parameter<int>("update_interval_ms", 500);
-
     declare_parameter<std::string>("world_frame", "world_frame");
+    declare_parameter<bool>("publish_visualization", true);
 
     // Set parameter callback
     parameter_subscriber_ = add_on_set_parameters_callback(std::bind(&TargetTrackingNode::parametersCallback, this, std::placeholders::_1));
 
     // Read parameters for subscriber and publisher
     param_topic_pointcloud_in_ = get_parameter("topic_pointcloud_in").as_string();
-    param_topic_pointcloud_out_ = get_parameter("topic_pointcloud_out").as_string();
+    param_topic_landmarks_out_ = get_parameter("topic_landmarks_out").as_string();
+    param_topic_visualization_out_ = get_parameter("topic_visualization_parameters").as_string();
+
 
     // Set QoS profile
     rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
@@ -46,7 +46,10 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
         param_topic_pointcloud_in_, qos, std::bind(&TargetTrackingNode::topic_callback, this, _1));
 
     // Publish landmarks
-    landmark_publisher_ = this->create_publisher<vortex_msgs::msg::LandmarkArray>(param_topic_pointcloud_out_, qos);
+    landmark_publisher_ = this->create_publisher<vortex_msgs::msg::LandmarkArray>(param_topic_landmarks_out_, qos);
+
+    // Publish visualization parameters
+    visualization_publisher_ = this->create_publisher<vortex_msgs::msg::ParameterArray>(param_topic_visualization_out_, qos);
 
     // Set timer
     int update_interval = get_parameter("update_interval_ms").as_int();
@@ -92,7 +95,6 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
             centroid_point.point.y = *iter_y;
             centroid_point.point.z = 0.0;
             tf2::doTransform(centroid_point, transformed_point, transform_stamped);
-            // std::cout << track.state.cov() << std::endl;, transform_stamped);
 
             Eigen::Vector2d point_2d;
             point_2d[0] = transformed_point.point.x;
@@ -104,6 +106,8 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
         RCLCPP_WARN(this->get_logger(), "Could not transform point cloud: %s", ex.what());
     }
 }
+
+
 rcl_interfaces::msg::SetParametersResult TargetTrackingNode::parametersCallback(const std::vector<rclcpp::Parameter> &parameters)
 {
     rcl_interfaces::msg::SetParametersResult result;
@@ -126,6 +130,8 @@ rcl_interfaces::msg::SetParametersResult TargetTrackingNode::parametersCallback(
     }
     return result;
 }
+
+
 void TargetTrackingNode::timer_callback()
 {
     // get parameters
@@ -148,6 +154,10 @@ void TargetTrackingNode::timer_callback()
     publish_landmarks(deletion_threshold);
 
     // Publish visualization parameters
+    if (get_parameter("publish_visualization").as_bool())
+    {
+        publish_visualization_parameters(gate_threshold, min_gate_threshold, max_gate_threshold);
+    }
 
     // delete tracks
     track_manager_.deleteTracks(deletion_threshold);
@@ -217,6 +227,28 @@ void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
     landmark_publisher_->publish(landmark_array);
 
     RCLCPP_INFO(this->get_logger(), "Published %lu tracks", landmark_array.landmarks.size());
+}
+
+void TargetTrackingNode::publish_visualization_parameters(double gate_threshold, double min_gate_threshold, double max_gate_threshold)
+{
+    vortex_msgs::msg::Parameter gate_threshold_msg;
+    gate_threshold_msg.name = "gate_threshold";
+    gate_threshold_msg.value = std::to_string(gate_threshold);
+
+    vortex_msgs::msg::Parameter min_gate_threshold_msg;
+    min_gate_threshold_msg.name = "min_gate_threshold";
+    min_gate_threshold_msg.value = std::to_string(min_gate_threshold);
+
+    vortex_msgs::msg::Parameter max_gate_threshold_msg;
+    max_gate_threshold_msg.name = "max_gate_threshold";
+    max_gate_threshold_msg.value = std::to_string(max_gate_threshold);
+
+    vortex_msgs::msg::ParameterArray visualization_params;
+    visualization_params.parameters.push_back(gate_threshold_msg);
+    visualization_params.parameters.push_back(min_gate_threshold_msg);
+    visualization_params.parameters.push_back(max_gate_threshold_msg);
+
+    visualization_publisher_->publish(visualization_params);
 }
 
 void TargetTrackingNode::update_timer(int update_interval)

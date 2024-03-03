@@ -11,14 +11,12 @@
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <vortex_msgs/msg/landmark.hpp>
 #include <vortex_msgs/msg/landmark_array.hpp>
-#include <vortex_msgs/msg/visualization_data.hpp>
-#include <vortex_msgs/msg/visualization_data_array.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/buffer.h>
-
+#include <vortex_msgs/msg/parameter.hpp>
+#include <vortex_msgs/msg/parameter_array.hpp>
 #include <cmath>
-
 #include <target_tracking/track_manager.hpp>
 
 class TargetTrackingNode : public rclcpp::Node {
@@ -54,6 +52,17 @@ private:
      * @param deletion_threshold The deletion threshold for the landmarks.
      */
     void publish_landmarks(double deletion_threshold);
+
+    /**
+     * @brief Publishes the visualization parameters to the output topic.
+     * 
+     * @param gate_threshold The gating threshold.
+     * 
+     * @param gate_min_threshold The minimum gating threshold.
+     * 
+     * @param gate_max_threshold The maximum gating threshold.
+     */
+    void publish_visualization_parameters(double gate_threshold, double gate_min_threshold, double gate_max_threshold);
 
     /**
      * @brief Updates the dynamic model with the given velocity standard deviation.
@@ -97,7 +106,11 @@ private:
     
     // Landmark publisher
     rclcpp::Publisher<vortex_msgs::msg::LandmarkArray>::SharedPtr landmark_publisher_;
-    std::string param_topic_pointcloud_out_;
+    std::string param_topic_landmarks_out_;
+
+    // Visualization publisher
+    rclcpp::Publisher<vortex_msgs::msg::ParameterArray>::SharedPtr visualization_publisher_;
+    std::string param_topic_visualization_out_;
 
     rclcpp::TimerBase::SharedPtr timer_;
 

@@ -5,7 +5,15 @@ TrackManager::TrackManager()
 {
 }
 
-void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int update_interval, double confirmation_threshold, double gate_theshhold, double min_gate_threshold, double max_gate_threshold, double prob_of_detection, double prob_of_survival, double clutter_intensity)
+void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, 
+    int update_interval, 
+    double confirmation_threshold, 
+    double gate_theshhold, 
+    double min_gate_threshold, 
+    double max_gate_threshold, 
+    double prob_of_detection, 
+    double prob_of_survival, 
+    double clutter_intensity)
 {
     // Sorts the tracks based on existence probability and confirmed track
     std::sort(tracks_.begin(), tracks_.end());
@@ -40,8 +48,6 @@ void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, int u
 
         // Update existence probability
         track.existence_probability = existence_probability;
-
-        std::cout << "existence probabilities" << existence_probability << std::endl;
 
         // Update track existence
         if (track.confirmed == false && existence_probability > confirmation_threshold)
