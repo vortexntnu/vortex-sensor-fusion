@@ -21,6 +21,8 @@ public:
 
     std::tuple<std::vector<std::vector<cv::Point2f>>, std::vector<int>, std::vector<cv::Vec3d>, std::vector<cv::Vec3d>> estimatePose(const cv::Mat& input_image);
 
+    cv::Ptr<cv::aruco::Board> createRectangularBoard(float markerSize, float xDist, float yDist, const cv::Ptr<cv::aruco::Dictionary> &dictionary, const std::vector<int> &ids);
+
 private:
     float marker_size;
     cv::Ptr<cv::aruco::Dictionary> dictionary;

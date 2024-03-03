@@ -9,12 +9,75 @@ namespace vortex::aruco_detector
 }
 ArucoDetectorNode::ArucoDetectorNode()
 {
+    this->declare_parameter<std::string>("camera_frame", "camera_link");
+    this->declare_parameter<std::string>("image_topic", "/image_raw");
+    this->declare_parameter<std::string>("camera_info_topic", "/image_raw/camera_info");
 
-    image_sub_ = this->create_subscription<sensor_msgs::msg::Image>("/image_raw", 10, std::bind(&ArucoDetectorNode::imageCallback, this, _1));
-    camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>("/image_raw/camera_info", 10, std::bind(&ArucoDetectorNode::cameraInfoCallback, this, _1));
+    this->declare_parameter<std::float>("camera.fx", 1061.29517988700);
+    this->declare_parameter<std::float>("camera.fy", 1061.17169143453);
+    this->declare_parameter<std::float>("camera.cx", 723.504570055496);
+    this->declare_parameter<std::float>("camera.cy", 585.265411909955);
+    this->declare_parameter<std::float>("distortion.k1", 0.000335365051980971);
+    this->declare_parameter<std::float>("distortion.k2", 0.000583836572965934);
+    this->declare_parameter<std::float>("distortion.p1", 0.0);
+    this->declare_parameter<std::float>("distortion.p2", 0.0);
+    this->declare_parameter<std::float>("distortion.k3", 0.000318839213604595);
+
+    this->declare_parameter<std::float>("aruco.marker_size", 0.150);
+    this->declare_parameter<std::string>("aruco.dictionary", "DICT_ARUCO_ORIGINAL");
+
+    this->declare_parameter<std::float>("board.markerSize", 0.150);
+    this->declare_parameter<std::string>("board.dictionary", "DICT_ARUCO_ORIGINAL");
+    this->declare_parameter<std::float>("xDist", 0.430);
+    this->declare_parameter<std::float>("yDist", 0.830);
+    this->declare_parameter<std::int[]>("ids",[28,7,96,19]);
+
+
+    // Retrieve parameters
+    float fx, fy, cx, cy, k1, k2, p1, p2, k3;
+    this->get_parameter("camera.fx", fx);
+    this->get_parameter("camera.fy", fy);
+    this->get_parameter("camera.cx", cx);
+    this->get_parameter("camera.cy", cy);
+    this->get_parameter("distortion.k1", k1);
+    this->get_parameter("distortion.k2", k2);
+    this->get_parameter("distortion.p1", p1);
+    this->get_parameter("distortion.p2", p2);
+    this->get_parameter("distortion.k3", k3);
+
+
+    camera_matrix_ = (cv::Mat_<double>(3, 3) << fx, 0, cx, 0, fy, cy, 0, 0, 1);
+    distortion_coefficients_ = (cv::Mat_<double>(1, 5) << k1, k2, p1, p2, k3);
+    
+
+    image_sub_ = this->create_subscription<sensor_msgs::msg::Image>(this->get_parameter("image_topic").as_string()
+    , 10, std::bind(&ArucoDetectorNode::imageCallback, this, _1));
+    camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(this->get_parameter("camera_info_topic").as_string()
+        "/image_raw/camera_info", 10, std::bind(&ArucoDetectorNode::cameraInfoCallback, this, _1));
 
     pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/aruco_poses", 10);
     image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/aruco_image", 10);
+
+    frame_ = this->get_parameter("camera_frame").as_string();
+
+    std::string dictionary_type = this->get_parameter("aruco.dictionary").as_string();
+    if(dictionary_map.count(dictionary_type)) {
+        dictionary_ = cv::aruco::getPredefinedDictionary(dictionary_map[dictionary_type]);
+    } else {
+        RCLCPP_WARN(this->get_logger(), "Invalid dictionary type received: %s. Using default.", dictionary_type.c_str());
+        dictionary_ = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_ARUCO_ORIGINAL);
+    }
+
+    marker_size_ = this->get_parameter("marker_size").as_float();
+    float xDist, yDist;
+    this->get_parameter("xDist", xDist);
+    this->get_parameter("yDist", yDist);
+    std::int[] ids;
+    this->get_parameter("ids", ids);
+    
+
+    aruco_detector = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_);
+    aruco_detector.createRectangularBoard(marker_size_, xDist, yDist, dictionary_, ids);
 }
 
 void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
@@ -46,7 +109,7 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
 
         tf2::Quaternion quat = rvec_to_quat(rvec);
 
-        auto pose_msg = cv_pose_to_ros_pose_stamped(rvec, quat, frame, marker_id);
+        auto pose_msg = cv_pose_to_ros_pose_stamped(rvec, quat, frame_, marker_id);
         pose_array.poses.push_back(pose_msg.pose);
     }
         pose_pub_->publish(pose_array);
@@ -82,7 +145,7 @@ tf2::Quaternion rvec_to_quat(const cv::Vec3d &rvec) {
 
 geometry_msgs::PoseStamped cv_pose_to_ros_pose_stamped(const cv::Vec3d &tvec, const tf2::Quaternion &quat, std::string frame_id, int marker_id) {
     // create the PoseStamped message
-    geometry_msgs::PoseStamped pose_msg;
+    geometry_msgs::msg::PoseStamped pose_msg;
 
     // fill in the header data
     pose_msg.header.stamp = ros::Time::now();

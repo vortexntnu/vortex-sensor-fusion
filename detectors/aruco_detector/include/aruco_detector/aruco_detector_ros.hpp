@@ -59,11 +59,10 @@ private:
 
     double fx, fy, cx, cy;
     double k1, k2, p1, p2, k3;
-    cv::Mat camera_matrix, distortion_coefficients;
-    float marker_size;
-    cv::Ptr<cv::aruco::Dictionary> dictionary;
-
-    std::string frame;
+    cv::Mat camera_matrix_, distortion_coefficients_;
+    float marker_size_;
+    cv::Ptr<cv::aruco::Dictionary> dictionary_;
+    std::string frame_;
 
 
     

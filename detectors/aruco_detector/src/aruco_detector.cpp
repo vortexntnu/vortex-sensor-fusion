@@ -1,4 +1,5 @@
 #include <aruco_detector/aruco_detector.hpp>
+#include "aruco_detector.hpp"
 
 namespace vortex::aruco_detector{
 
@@ -32,4 +33,60 @@ std::tuple<std::vector<std::vector<cv::Point2f>>, std::vector<int>, std::vector<
 
     return std::make_tuple(marker_corners, marker_ids, rvecs, tvecs);
 }
+
+cv::Ptr<cv::aruco::Board> ArucoDetector::createRectangularBoard(float markerSize, float xDist, float yDist, const cv::Ptr<cv::aruco::Dictionary> &dictionary,
+                                                               const std::vector<int> &ids)
+{
+	const float markerHalf{markerSize / 2}, xHalf{xDist / 2}, yHalf{yDist / 2};
+
+	// Define center of each marker
+	std::vector<cv::Point3f> markerCenters;
+	markerCenters.push_back({-xHalf - markerHalf, yHalf + markerHalf, 0});
+	markerCenters.push_back({xHalf + markerHalf, yHalf + markerHalf, 0});
+	markerCenters.push_back({xHalf + markerHalf, -yHalf - markerHalf, 0});
+	markerCenters.push_back({-xHalf - markerHalf, -yHalf - markerHalf, 0});
+
+	// Place marker at each marker center
+	std::vector<std::vector<cv::Point3f>> markerPoints;
+	for (size_t i{0}; i < markerCenters.size(); i++) {
+		std::vector<cv::Point3f> marker;
+		float xOffset{markerCenters.at(i).x};
+		float yOffset{markerCenters.at(i).y};
+
+		// Marker corners need to be added CLOCKWISE from top left corner
+		marker.push_back({xOffset - markerHalf, yOffset + markerHalf, 0});
+		marker.push_back({xOffset + markerHalf, yOffset + markerHalf, 0});
+		marker.push_back({xOffset + markerHalf, yOffset - markerHalf, 0});
+		marker.push_back({xOffset - markerHalf, yOffset - markerHalf, 0});
+		markerPoints.push_back(marker);
+	}
+	cv::Ptr<cv::aruco::Board> board = new cv::aruco::Board;
+	board                           = cv::aruco::Board::create(markerPoints, dictionary, ids);
+	return board;
+
+	/*
+
+	top left corner of marker
+	|
+	X---O               X---O
+	|id0|---- xDist ----|id1|
+	O---O               O---O
+	  |                   |
+	  |                   |
+	  |                   |
+	  |                   |
+	yDist       O       yDist
+	  |         |         |
+	  |      origin       |
+	  |                   |
+	  |                   |
+	X---O               X---O
+	|id3|---- xDist ----|id2|
+	O---O               O---O
+	|   |
+	markerSize
+
+	*/
+};
+
 } // namespace vortex::aruco_detector   
