@@ -75,7 +75,10 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     this->get_parameter("board.yDist", yDist_);
     std::vector<int64_t> param_ids;
     this->get_parameter("board.ids", param_ids);
-    ids_ = 
+    // Convert int64_t vector to int vector
+    std::vector<int> ids_(param_ids.begin(), param_ids.end());
+
+
 
     
 
