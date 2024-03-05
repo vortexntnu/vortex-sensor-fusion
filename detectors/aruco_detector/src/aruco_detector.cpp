@@ -1,4 +1,5 @@
 #include <aruco_detector/aruco_detector.hpp>
+#include <iostream>
 
 namespace vortex::aruco_detector{
 
@@ -11,26 +12,30 @@ ArucoDetector::ArucoDetector(cv::Ptr<cv::aruco::Dictionary> dict,
 
 ArucoDetector::~ArucoDetector() {}
 
-std::tuple<std::vector<std::vector<cv::Point2f>>, std::vector<int>, std::vector<cv::Vec3d>, std::vector<cv::Vec3d>> ArucoDetector::estimatePose(const cv::Mat& input_image) {
+std::tuple<std::vector<std::vector<cv::Point2f>>, std::vector<std::vector<cv::Point2f>>, std::vector<int>, std::vector<cv::Vec3d>, std::vector<cv::Vec3d>> ArucoDetector::estimatePose(const cv::Mat& input_image) {
     cv::Mat input_image_rgb;
     cv::cvtColor(input_image, input_image_rgb, cv::COLOR_RGBA2RGB);
 
     cv::Mat input_image_gray;
-    cv::cvtColor(input_image_rgb, input_image_gray, cv::COLOR_RGB2GRAY);
+	cv::cvtColor(input_image_rgb, input_image_gray, cv::COLOR_RGB2GRAY);
 
 
-    std::vector<int> marker_ids;
-    std::vector<std::vector<cv::Point2f>> marker_corners;
-    cv::aruco::detectMarkers(input_image_gray, dictionary_, marker_corners, marker_ids);
+	std::vector<int> marker_ids;
+	std::vector<std::vector<cv::Point2f>> marker_corners, rejected_candidates;
+	cv::Ptr<cv::aruco::DetectorParameters> detector_params = cv::aruco::DetectorParameters::create();
+	detector_params->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
+	
+	cv::aruco::detectMarkers(input_image, dictionary_, marker_corners, marker_ids, detector_params, rejected_candidates);
 
-    std::vector<cv::Vec3d> rvecs, tvecs;
+	std::vector<cv::Vec3d> rvecs, tvecs;
+	std::cout << "marker_ids.size(): " << marker_ids.size() << std::endl;
+	std::cout << "rejected_candidates.size(): " << rejected_candidates.size() << std::endl;
+	if (!marker_ids.empty()) {
+		cv::aruco::estimatePoseSingleMarkers(marker_corners, marker_size_, camera_matrix_, distortion_coeffs_, rvecs, tvecs);
 
-    if (!marker_ids.empty()) {
-        cv::aruco::estimatePoseSingleMarkers(marker_corners, marker_size_, camera_matrix_, distortion_coeffs_, rvecs, tvecs);
+	}
 
-    }
-
-    return std::make_tuple(marker_corners, marker_ids, rvecs, tvecs);
+    return std::make_tuple(marker_corners, rejected_candidates, marker_ids, rvecs, tvecs);
 }
 
 cv::Ptr<cv::aruco::Board> ArucoDetector::createRectangularBoard(float markerSize, float xDist, float yDist, const cv::Ptr<cv::aruco::Dictionary> &dictionary,

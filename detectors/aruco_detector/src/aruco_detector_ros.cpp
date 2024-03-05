@@ -22,7 +22,7 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     this->declare_parameter<float>("distortion.k3", 0.000318839213604595);
 
     this->declare_parameter<float>("aruco.marker_size", 0.150);
-    this->declare_parameter<std::string>("aruco.dictionary", "DICT_ARUCO_ORIGINAL");
+    this->declare_parameter<std::string>("aruco.dictionary", "DICT_6X6_250");
 
     this->declare_parameter<bool>("detect_board", true);
     this->declare_parameter<bool>("detect_markers", true);
@@ -52,7 +52,7 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     std::string image_topic,camera_info_topic;
     this->get_parameter("image_topic", image_topic);
     this->get_parameter("camera_info_topic", camera_info_topic);
-    image_sub_ = this->create_subscription<sensor_msgs::msg::Image>(image_topic
+    image_sub_ = this->create_subscription<sensor_msgs::msg::Image>("/image_topic"
     , 10, std::bind(&ArucoDetectorNode::imageCallback, this, _1));
     // camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(camera_info_topic, 10, std::bind(&ArucoDetectorNode::cameraInfoCallback, this, _1));
 
@@ -88,15 +88,16 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
 
     aruco_detector_ = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_);
 
-    board_ = aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
+    // board_ = aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
 }
 
 
 
 void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
 {
-    cv_bridge::CvImagePtr cv_ptr;
 
+    cv_bridge::CvImagePtr cv_ptr;
+    RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
     try
     {
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
@@ -111,9 +112,9 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
     geometry_msgs::msg::PoseArray pose_array;
 
     // DEBUG: Draw detections on image
-    auto [marker_corners, marker_ids, rvecs, tvecs] = aruco_detector_->estimatePose(input_image);
+    auto [marker_corners, rejected_candidates, marker_ids, rvecs, tvecs] = aruco_detector_->estimatePose(input_image);
+    // RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Detected " << markerIds.size() << " markers");
 
-    
     for (size_t i = 0; i < marker_ids.size(); i++)
     {
         // Retrieve marker ID and pose
@@ -126,6 +127,10 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
         auto pose_msg = cv_pose_to_ros_pose_stamped(rvec, quat, frame_, marker_id);
         pose_array.poses.push_back(pose_msg.pose);
     }
+        if(pose_array.poses.size() > 0){
+            pose_array.header.stamp = this->get_clock()->now();
+            pose_array.header.frame_id = "camera_link";
+        }
         pose_pub_->publish(pose_array);
 
 
@@ -134,6 +139,8 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
     {
         cv::aruco::drawAxis(input_image, camera_matrix_, distortion_coefficients_, rvecs[i], tvecs[i], 0.1);
     }
+
+    cv::aruco::drawDetectedMarkers(input_image, rejected_candidates, cv::noArray(), cv::Scalar(100, 0, 255));
 
     auto message = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", input_image).toImageMsg();
     marker_image_pub_->publish(*message);
@@ -163,7 +170,7 @@ geometry_msgs::msg::PoseStamped aruco_detector::ArucoDetectorNode::cv_pose_to_ro
 
     // fill in the header data
     pose_msg.header.stamp = this->get_clock()->now();
-    pose_msg.header.frame_id = frame_id + "_marker_id_" +  std::to_string(marker_id);
+    pose_msg.header.frame_id = "camera_link";
 
     // fill in the position data
     pose_msg.pose.position.x = tvec[0];
