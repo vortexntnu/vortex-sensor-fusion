@@ -18,12 +18,11 @@ aruco_detector_node:
   aruco:
     # TAC ARUCO PARAMETERS
     marker_size: 0.150
-    dictionary: "DICT_ARUCO_ORIGINAL"
   
+  detect_board: true  # Set to true to detect aruco boards
+
   #TAC ARUCO BOARD PARAMETERS
   board:
-    marker_size: 0.150
-    dictionary: "DICT_ARUCO_ORIGINAL"
-    xDist: .430
-    yDist: .830
+    xDist: 0.430
+    yDist: 0.830
     ids: [28, 7, 96, 19]

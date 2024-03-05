@@ -18,7 +18,22 @@ find_package(tf2 REQUIRED)
 include_directories(include)
 
 add_executable(${PROJECT_NAME}_node 
-  src/aruco_detector.cpp)
+  src/aruco_detector.cpp
+  src/aruco_detector_ros.cpp
+  src/aruco_detector_node.cpp
+  )
+
+target_include_directories(${PROJECT_NAME}_node PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(${PROJECT_NAME}_node ${OpenCV_LIBS})
+
+ament_target_dependencies(${PROJECT_NAME}_node
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  tf2
+  cv_bridge
+
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

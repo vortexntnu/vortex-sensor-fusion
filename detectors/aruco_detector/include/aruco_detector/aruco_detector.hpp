@@ -16,6 +16,7 @@ public:
                   float marker_size, 
                   const cv::Mat& camera_matrix,
                   const cv::Mat& distortion_coeffs);
+    
 
     ~ArucoDetector();
 
@@ -24,10 +25,10 @@ public:
     cv::Ptr<cv::aruco::Board> createRectangularBoard(float markerSize, float xDist, float yDist, const cv::Ptr<cv::aruco::Dictionary> &dictionary, const std::vector<int> &ids);
 
 private:
-    float marker_size;
-    cv::Ptr<cv::aruco::Dictionary> dictionary;
-    cv::Mat camera_matrix;
-    cv::Mat distortion_coeffs;
+    cv::Ptr<cv::aruco::Dictionary> dictionary_;
+    float marker_size_, xDist_, yDist_;
+    cv::Mat camera_matrix_;
+    cv::Mat distortion_coeffs_;
 };
 
 } // namespace vortex::aruco_detector

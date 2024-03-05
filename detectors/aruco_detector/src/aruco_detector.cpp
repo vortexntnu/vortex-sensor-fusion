@@ -1,5 +1,4 @@
 #include <aruco_detector/aruco_detector.hpp>
-#include "aruco_detector.hpp"
 
 namespace vortex::aruco_detector{
 
@@ -7,7 +6,7 @@ ArucoDetector::ArucoDetector(cv::Ptr<cv::aruco::Dictionary> dict,
                              float marker_size, 
                              const cv::Mat& camera_matrix,
                              const cv::Mat& distortion_coeffs)
-    : dictionary(dict), marker_size{marker_size}, camera_matrix(camera_matrix), distortion_coeffs(distortion_coeffs) {
+    : dictionary_(dict), marker_size_{marker_size}, camera_matrix_(camera_matrix), distortion_coeffs_(distortion_coeffs) {
 }
 
 ArucoDetector::~ArucoDetector() {}
@@ -22,12 +21,12 @@ std::tuple<std::vector<std::vector<cv::Point2f>>, std::vector<int>, std::vector<
 
     std::vector<int> marker_ids;
     std::vector<std::vector<cv::Point2f>> marker_corners;
-    cv::aruco::detectMarkers(input_image_gray, dictionary, marker_corners, marker_ids);
+    cv::aruco::detectMarkers(input_image_gray, dictionary_, marker_corners, marker_ids);
 
     std::vector<cv::Vec3d> rvecs, tvecs;
 
     if (!marker_ids.empty()) {
-        cv::aruco::estimatePoseSingleMarkers(marker_corners, marker_size, camera_matrix, distortion_coeffs, rvecs, tvecs);
+        cv::aruco::estimatePoseSingleMarkers(marker_corners, marker_size_, camera_matrix_, distortion_coeffs_, rvecs, tvecs);
 
     }
 

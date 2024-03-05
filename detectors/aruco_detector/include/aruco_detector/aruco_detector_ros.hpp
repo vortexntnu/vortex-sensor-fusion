@@ -6,6 +6,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 
 #include <map>
 #include <string>
@@ -47,7 +48,7 @@ public:
 
 private: 
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
-    rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
+    // rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
 
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_pub_;
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
@@ -56,11 +57,17 @@ private:
 
     void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg);
 
+    tf2::Quaternion rvec_to_quat(const cv::Vec3d &rvec);
+
+    geometry_msgs::msg::PoseStamped cv_pose_to_ros_pose_stamped(const cv::Vec3d &tvec, const tf2::Quaternion &quat, std::string frame_id, int marker_id);
+
+
 
     double fx, fy, cx, cy;
     double k1, k2, p1, p2, k3;
     cv::Mat camera_matrix_, distortion_coefficients_;
-    float marker_size_;
+    float marker_size_,xDist_,yDist_;
+    std::vector<int64_t> ids_;
     cv::Ptr<cv::aruco::Dictionary> dictionary_;
     std::string frame_;
 

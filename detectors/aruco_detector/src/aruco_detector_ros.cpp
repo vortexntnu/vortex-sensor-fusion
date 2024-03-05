@@ -1,36 +1,35 @@
 #include <aruco_detector/aruco_detector_ros.hpp>
-#include "aruco_detector_ros.hpp"
 
 using std::placeholders::_1;
 
-namespace vortex::aruco_detector
-{
+namespace vortex {
+namespace aruco_detector {
 
-}
-ArucoDetectorNode::ArucoDetectorNode()
+ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
 {
     this->declare_parameter<std::string>("camera_frame", "camera_link");
     this->declare_parameter<std::string>("image_topic", "/image_raw");
     this->declare_parameter<std::string>("camera_info_topic", "/image_raw/camera_info");
 
-    this->declare_parameter<std::float>("camera.fx", 1061.29517988700);
-    this->declare_parameter<std::float>("camera.fy", 1061.17169143453);
-    this->declare_parameter<std::float>("camera.cx", 723.504570055496);
-    this->declare_parameter<std::float>("camera.cy", 585.265411909955);
-    this->declare_parameter<std::float>("distortion.k1", 0.000335365051980971);
-    this->declare_parameter<std::float>("distortion.k2", 0.000583836572965934);
-    this->declare_parameter<std::float>("distortion.p1", 0.0);
-    this->declare_parameter<std::float>("distortion.p2", 0.0);
-    this->declare_parameter<std::float>("distortion.k3", 0.000318839213604595);
+    this->declare_parameter<float>("camera.fx", 1061.29517988700);
+    this->declare_parameter<float>("camera.fy", 1061.17169143453);
+    this->declare_parameter<float>("camera.cx", 723.504570055496);
+    this->declare_parameter<float>("camera.cy", 585.265411909955);
+    this->declare_parameter<float>("distortion.k1", 0.000335365051980971);
+    this->declare_parameter<float>("distortion.k2", 0.000583836572965934);
+    this->declare_parameter<float>("distortion.p1", 0.0);
+    this->declare_parameter<float>("distortion.p2", 0.0);
+    this->declare_parameter<float>("distortion.k3", 0.000318839213604595);
 
-    this->declare_parameter<std::float>("aruco.marker_size", 0.150);
+    this->declare_parameter<float>("aruco.marker_size", 0.150);
     this->declare_parameter<std::string>("aruco.dictionary", "DICT_ARUCO_ORIGINAL");
 
-    this->declare_parameter<std::float>("board.markerSize", 0.150);
-    this->declare_parameter<std::string>("board.dictionary", "DICT_ARUCO_ORIGINAL");
-    this->declare_parameter<std::float>("xDist", 0.430);
-    this->declare_parameter<std::float>("yDist", 0.830);
-    this->declare_parameter<std::int[]>("ids",[28,7,96,19]);
+    this->declare_parameter<float>("detect_board", true);
+
+    this->declare_parameter<float>("board.xDist", 0.430);
+    this->declare_parameter<float>("board.yDist", 0.830);
+    std::vector<int64_t> board_ids = {28, 7, 96, 19};
+    this->declare_parameter("board.ids", board_ids);
 
 
     // Retrieve parameters
@@ -49,16 +48,19 @@ ArucoDetectorNode::ArucoDetectorNode()
     camera_matrix_ = (cv::Mat_<double>(3, 3) << fx, 0, cx, 0, fy, cy, 0, 0, 1);
     distortion_coefficients_ = (cv::Mat_<double>(1, 5) << k1, k2, p1, p2, k3);
     
-
-    image_sub_ = this->create_subscription<sensor_msgs::msg::Image>(this->get_parameter("image_topic").as_string()
+    std::string image_topic,camera_info_topic;
+    this->get_parameter("image_topic", image_topic);
+    this->get_parameter("camera_info_topic", camera_info_topic);
+    image_sub_ = this->create_subscription<sensor_msgs::msg::Image>(image_topic
     , 10, std::bind(&ArucoDetectorNode::imageCallback, this, _1));
-    camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(this->get_parameter("camera_info_topic").as_string()
-        "/image_raw/camera_info", 10, std::bind(&ArucoDetectorNode::cameraInfoCallback, this, _1));
+    // camera_info_sub_ = this->create_subscription<sensor_msgs::msg::CameraInfo>(camera_info_topic, 10, std::bind(&ArucoDetectorNode::cameraInfoCallback, this, _1));
 
     pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/aruco_poses", 10);
-    image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/aruco_image", 10);
 
-    frame_ = this->get_parameter("camera_frame").as_string();
+    image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/aruco_image", 10);
+    
+
+    this->get_parameter("camera_frame",frame_);
 
     std::string dictionary_type = this->get_parameter("aruco.dictionary").as_string();
     if(dictionary_map.count(dictionary_type)) {
@@ -68,17 +70,20 @@ ArucoDetectorNode::ArucoDetectorNode()
         dictionary_ = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_ARUCO_ORIGINAL);
     }
 
-    marker_size_ = this->get_parameter("marker_size").as_float();
-    float xDist, yDist;
-    this->get_parameter("xDist", xDist);
-    this->get_parameter("yDist", yDist);
-    std::int[] ids;
-    this->get_parameter("ids", ids);
+    this->get_parameter("aruco.marker_size", marker_size_);
+    this->get_parameter("board.xDist", xDist_);
+    this->get_parameter("board.yDist", yDist_);
+    std::vector<int64_t> param_ids;
+    this->get_parameter("board.ids", param_ids);
+    ids_ = 
+
     
 
-    aruco_detector = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_);
-    aruco_detector.createRectangularBoard(marker_size_, xDist, yDist, dictionary_, ids);
+    aruco_detector_ = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_);
+    aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
 }
+
+
 
 void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
 {
@@ -98,9 +103,9 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
     geometry_msgs::msg::PoseArray pose_array;
 
     // DEBUG: Draw detections on image
-    auto [marker_corners, marker_ids, rvecs, tvecs] = aruco_detector->estimatePose(input_image);
+    auto [marker_corners, marker_ids, rvecs, tvecs] = aruco_detector_->estimatePose(input_image);
 
-    for (int i = 0; i < marker_ids.size(); i++)
+    for (size_t i = 0; i < marker_ids.size(); i++)
     {
         // Retrieve marker ID and pose
         int marker_id = marker_ids[i];
@@ -116,16 +121,16 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
 
 
     cv::aruco::drawDetectedMarkers(input_image, marker_corners, marker_ids);
-    for (int i = 0; i < marker_ids.size(); ++i)
+    for (size_t i = 0; i < marker_ids.size(); ++i)
     {
-        cv::aruco::drawAxis(input_image, camera_matrix, distortion_coefficients, rvecs[i], tvecs[i], 0.1);
+        cv::aruco::drawAxis(input_image, camera_matrix_, distortion_coefficients_, rvecs[i], tvecs[i], 0.1);
     }
 
-    sensor_msgs::msg::Image msg_to_publish = cv_bridge::CvImage(std_msgs::Header(), "bgr8", input_image).toImageMsg();
-    image_publisher.publish(msg_to_publish);
+    auto message = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", input_image).toImageMsg();
+    image_pub_->publish(*message);
 }
 
-tf2::Quaternion rvec_to_quat(const cv::Vec3d &rvec) {
+tf2::Quaternion aruco_detector::ArucoDetectorNode::rvec_to_quat(const cv::Vec3d &rvec) {
     // Convert rotation vector to rotation matrix
     cv::Mat rmat;
     cv::Rodrigues(rvec, rmat);
@@ -143,12 +148,12 @@ tf2::Quaternion rvec_to_quat(const cv::Vec3d &rvec) {
     return quaternion;
 }
 
-geometry_msgs::PoseStamped cv_pose_to_ros_pose_stamped(const cv::Vec3d &tvec, const tf2::Quaternion &quat, std::string frame_id, int marker_id) {
+geometry_msgs::msg::PoseStamped aruco_detector::ArucoDetectorNode::cv_pose_to_ros_pose_stamped(const cv::Vec3d &tvec, const tf2::Quaternion &quat, std::string frame_id, int marker_id) {
     // create the PoseStamped message
     geometry_msgs::msg::PoseStamped pose_msg;
 
     // fill in the header data
-    pose_msg.header.stamp = ros::Time::now();
+    pose_msg.header.stamp = this->get_clock()->now();
     pose_msg.header.frame_id = frame_id + "_marker_id_" +  std::to_string(marker_id);
 
     // fill in the position data
@@ -165,3 +170,5 @@ geometry_msgs::PoseStamped cv_pose_to_ros_pose_stamped(const cv::Vec3d &tvec, co
     // publish the PoseStamped message
     return pose_msg;
 }
+} // namespace vortex::aruco_detector
+} // namespace vortex
