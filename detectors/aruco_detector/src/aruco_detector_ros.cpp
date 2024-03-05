@@ -24,7 +24,8 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     this->declare_parameter<float>("aruco.marker_size", 0.150);
     this->declare_parameter<std::string>("aruco.dictionary", "DICT_ARUCO_ORIGINAL");
 
-    this->declare_parameter<float>("detect_board", true);
+    this->declare_parameter<bool>("detect_board", true);
+    this->declare_parameter<bool>("detect_markers", true);
 
     this->declare_parameter<float>("board.xDist", 0.430);
     this->declare_parameter<float>("board.yDist", 0.830);
@@ -57,7 +58,9 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
 
     pose_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/aruco_poses", 10);
 
-    image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/aruco_image", 10);
+    marker_image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/aruco_marker_image", 10);
+
+    board_image_pub_ = this->create_publisher<sensor_msgs::msg::Image>("/aruco_board_image", 10);
     
 
     this->get_parameter("camera_frame",frame_);
@@ -70,6 +73,9 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
         dictionary_ = cv::aruco::getPredefinedDictionary(cv::aruco::DICT_ARUCO_ORIGINAL);
     }
 
+    this->get_parameter("detect_markers", detect_markers_);
+    this->get_parameter("detect_board", detect_board_);
+
     this->get_parameter("aruco.marker_size", marker_size_);
     this->get_parameter("board.xDist", xDist_);
     this->get_parameter("board.yDist", yDist_);
@@ -80,10 +86,9 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
 
 
 
-    
-
     aruco_detector_ = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_);
-    aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
+
+    board_ = aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
 }
 
 
@@ -108,6 +113,7 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
     // DEBUG: Draw detections on image
     auto [marker_corners, marker_ids, rvecs, tvecs] = aruco_detector_->estimatePose(input_image);
 
+    
     for (size_t i = 0; i < marker_ids.size(); i++)
     {
         // Retrieve marker ID and pose
@@ -130,7 +136,7 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
     }
 
     auto message = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", input_image).toImageMsg();
-    image_pub_->publish(*message);
+    marker_image_pub_->publish(*message);
 }
 
 tf2::Quaternion aruco_detector::ArucoDetectorNode::rvec_to_quat(const cv::Vec3d &rvec) {

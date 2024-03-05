@@ -15,11 +15,13 @@ aruco_detector_node:
     p2: 0.0
     k3: 0.000318839213604595
 
+  detect_markers: true  # Set to true to detect aruco markers
+  detect_board: true  # Set to true to detect aruco boards
+
   aruco:
     # TAC ARUCO PARAMETERS
     marker_size: 0.150
   
-  detect_board: true  # Set to true to detect aruco boards
 
   #TAC ARUCO BOARD PARAMETERS
   board:

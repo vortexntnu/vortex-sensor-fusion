@@ -24,11 +24,14 @@ public:
 
     cv::Ptr<cv::aruco::Board> createRectangularBoard(float markerSize, float xDist, float yDist, const cv::Ptr<cv::aruco::Dictionary> &dictionary, const std::vector<int> &ids);
 
+    size_t detectBoardPose(const cv::Mat &originalImg, cv::Mat &modifiedImg, const cv::Ptr<cv::aruco::Board> &board, geometry_msgs::Pose &pose);
+
 private:
     cv::Ptr<cv::aruco::Dictionary> dictionary_;
     float marker_size_, xDist_, yDist_;
     cv::Mat camera_matrix_;
     cv::Mat distortion_coeffs_;
+    cv::Ptr<cv::aruco::Board> board_;
 };
 
 } // namespace vortex::aruco_detector

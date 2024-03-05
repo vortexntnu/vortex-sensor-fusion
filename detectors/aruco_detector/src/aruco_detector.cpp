@@ -88,4 +88,39 @@ cv::Ptr<cv::aruco::Board> ArucoDetector::createRectangularBoard(float markerSize
 	*/
 };
 
+// size_t ArucoDetector::detectBoardPose(const cv::Mat &originalImg, cv::Mat &modifiedImg, const cv::Ptr<cv::aruco::Board> &board, geometry_msgs::Pose &pose)
+// {
+
+// 	if (originalImg.empty())
+// 		// ROS_WARN("No image");
+
+// 	std::vector<std::vector<cv::Point2f>> corners, rejected;
+// 	std::vector<int> ids, recoveredIds;
+// 	originalImg.copyTo(modifiedImg);
+
+// 	cv::aruco::detectMarkers(originalImg, board->dictionary, corners, ids, detectorParams, rejected);
+// 	if (ids.size() == 0)
+// 		return 0;
+// 	Draw Markers
+// 	cv::aruco::drawDetectedMarkers(modifiedImg, corners, ids);
+// 	cv::aruco::drawDetectedMarkers(modifiedImg, rejected, cv::noArray(), cv::Scalar(0, 0, 255));
+
+// 	// Estimate pose
+// 	cv::Vec3d rvec, tvec;
+// 	int numUsedMarkers = cv::aruco::estimatePoseBoard(corners, ids, board, cameraMatrix, distortionCoefficients, rvec,
+// 	                                                  tvec); // replace with cv::solvePnP if OpenCV is updated to v. 4.5.5 or
+// 	                                                         // above. It is more accurate
+// 	cv::aruco::refineDetectedMarkers(originalImg, board, corners, ids, rejected, cameraMatrix, distortionCoefficients, 10, 3, true, recoveredIds, detectorParams);
+// 	numUsedMarkers += recoveredIds.size();
+// 	size_t detectedMarkerThreshhold = 1;
+// 	if (numUsedMarkers < 1)
+// 		return 0; // Don't estimate if you only see less markers than the threshhold
+// 	pose = tvec_rvec2pose(rvec, tvec);
+
+// 	float length = cv::norm(board->objPoints[0][0] - board->objPoints[0][1]); // Visual length of the drawn axis
+// 	cv::aruco::drawAxis(modifiedImg, cameraMatrix, distortionCoefficients, rvec, tvec, length);
+
+// 	return numUsedMarkers;
+// }
+
 } // namespace vortex::aruco_detector   

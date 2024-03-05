@@ -51,7 +51,8 @@ private:
     // rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
 
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr image_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr marker_image_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr board_image_pub_;
 
     std::unique_ptr<ArucoDetector> aruco_detector_;
 
@@ -66,6 +67,8 @@ private:
     double fx, fy, cx, cy;
     double k1, k2, p1, p2, k3;
     cv::Mat camera_matrix_, distortion_coefficients_;
+    bool detect_markers_;
+    bool detect_board_;
     float marker_size_,xDist_,yDist_;
     std::vector<int64_t> ids_;
     cv::Ptr<cv::aruco::Dictionary> dictionary_;
