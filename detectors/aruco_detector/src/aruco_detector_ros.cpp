@@ -24,7 +24,7 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     this->declare_parameter<float>("aruco.marker_size", 0.150);
     this->declare_parameter<std::string>("aruco.dictionary", "DICT_6X6_250");
 
-    this->declare_parameter<bool>("detect_board", true);
+    this->declare_parameter<bool>("detect_board", false);
     this->declare_parameter<bool>("detect_markers", true);
 
     this->declare_parameter<float>("board.xDist", 0.430);
@@ -76,6 +76,7 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     this->get_parameter("detect_markers", detect_markers_);
     this->get_parameter("detect_board", detect_board_);
 
+
     this->get_parameter("aruco.marker_size", marker_size_);
     this->get_parameter("board.xDist", xDist_);
     this->get_parameter("board.yDist", yDist_);
@@ -84,11 +85,13 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     // Convert int64_t vector to int vector
     std::vector<int> ids_(param_ids.begin(), param_ids.end());
 
+    detector_params_ = cv::aruco::DetectorParameters::create();
+	detector_params_->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
 
 
-    aruco_detector_ = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_);
+    aruco_detector_ = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_, detector_params_);
 
-    // board_ = aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
+    aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
 }
 
 
@@ -97,10 +100,19 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
 {
 
     cv_bridge::CvImagePtr cv_ptr;
-    RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
+        cv::Mat input_image_gray;
+        cv::Mat input_image_rgb;
+        cv::Mat input_image;
     try
     {
         cv_ptr = cv_bridge::toCvCopy(msg, sensor_msgs::image_encodings::BGR8);
+
+        input_image = cv_ptr->image;
+
+        cv::cvtColor(input_image, input_image_rgb, cv::COLOR_RGBA2RGB);
+
+	    cv::cvtColor(input_image_rgb, input_image_gray, cv::COLOR_RGB2GRAY);
+
     }
     catch (cv_bridge::Exception &e)
     {
@@ -108,12 +120,20 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
         return;
     }
 
-    cv::Mat input_image = cv_ptr->image;
     geometry_msgs::msg::PoseArray pose_array;
 
     // DEBUG: Draw detections on image
-    auto [marker_corners, rejected_candidates, marker_ids, rvecs, tvecs] = aruco_detector_->estimatePose(input_image);
-    // RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Detected " << markerIds.size() << " markers");
+    // markers to vector transform will be done after refineBoardMarkers in case of recovered candidates
+    auto [marker_corners, rejected_candidates, marker_ids, rvecs, tvecs] = aruco_detector_->detectArucoMarkers(input_image_gray);
+    if(detect_board_ && marker_ids.size() > 0){
+    auto [valid, rvec, tvec] = aruco_detector_->estimateBoardPose(marker_corners, marker_ids);
+    RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Detected " << marker_ids.size() << " markers");
+
+    if(valid > 0){
+        std::vector<int> recovered_candidates = aruco_detector_->refineBoardMarkers(input_image_gray, marker_corners, marker_ids, rejected_candidates);
+    }
+    }
+
 
     for (size_t i = 0; i < marker_ids.size(); i++)
     {

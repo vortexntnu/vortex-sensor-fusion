@@ -73,6 +73,7 @@ private:
     std::vector<int64_t> ids_;
     cv::Ptr<cv::aruco::Dictionary> dictionary_;
     std::string frame_;
+    cv::Ptr<cv::aruco::DetectorParameters> detector_params_;
 
 
     
