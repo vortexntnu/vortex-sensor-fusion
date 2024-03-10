@@ -17,6 +17,7 @@ aruco_detector_node:
 
   detect_markers: true  # Set to true to detect aruco markers
   detect_board: true  # Set to true to detect aruco boards
+  visualize: true  # Set to true to visualize the detected markers and board
 
   aruco:
     # TAC ARUCO PARAMETERS
@@ -28,3 +29,4 @@ aruco_detector_node:
     xDist: 0.430
     yDist: 0.830
     ids: [28, 7, 96, 19]
+

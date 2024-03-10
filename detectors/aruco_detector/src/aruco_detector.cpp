@@ -70,7 +70,7 @@ cv::Ptr<cv::aruco::Board> ArucoDetector::createRectangularBoard(float markerSize
 	*/
 };
 
-std::tuple<std::vector<std::vector<cv::Point2f>>, std::vector<std::vector<cv::Point2f>>, std::vector<int>, std::vector<cv::Vec3d>, std::vector<cv::Vec3d>> ArucoDetector::detectArucoMarkers(const cv::Mat &input_image)
+std::tuple<std::vector<std::vector<cv::Point2f>>, std::vector<std::vector<cv::Point2f>>, std::vector<int>> ArucoDetector::detectArucoMarkers(const cv::Mat &input_image)
 {
  
 	std::vector<int> marker_ids;
@@ -82,20 +82,19 @@ std::tuple<std::vector<std::vector<cv::Point2f>>, std::vector<std::vector<cv::Po
 	std::vector<cv::Vec3d> rvecs, tvecs;
 	// std::cout << "marker_ids.size(): " << marker_ids.size() << std::endl;
 	// std::cout << "rejected_candidates.size(): " << rejected_candidates.size() << std::endl;
-	if (!marker_ids.empty()) {
+	// if (!marker_ids.empty()) {
 		cv::aruco::estimatePoseSingleMarkers(marker_corners, marker_size_, camera_matrix_, distortion_coeffs_, rvecs, tvecs);
 
-	}
+	// }
 
-    return std::make_tuple(marker_corners, rejected_candidates, marker_ids, rvecs, tvecs);
+    return std::make_tuple(marker_corners, rejected_candidates, marker_ids);
 }
 
     std::tuple<int, cv::Vec3d, cv::Vec3d> ArucoDetector::estimateBoardPose(std::vector<std::vector<cv::Point2f>> marker_corners, std::vector<int> marker_ids){
 		cv::Vec3d rvec, tvec;
 		int numUsedMarkers = cv::aruco::estimatePoseBoard(marker_corners, marker_ids, board_, camera_matrix_, distortion_coeffs_, rvec, tvec);
 
-		return std::make_tuple(numUsedMarkers, rvec, tvec);
-	
+		return {numUsedMarkers, rvec, tvec};
 	}
 
 

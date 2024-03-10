@@ -1,4 +1,6 @@
-#include <aruco_detector/aruco_detector_ros.hpp>
+// #include <aruco_detector/aruco_detector_ros.hpp>
+#include "../include/aruco_detector/aruco_detector_ros.hpp"
+
 
 using std::placeholders::_1;
 
@@ -26,6 +28,7 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
 
     this->declare_parameter<bool>("detect_board", false);
     this->declare_parameter<bool>("detect_markers", true);
+    this->declare_parameter<float>("visualize", true);
 
     this->declare_parameter<float>("board.xDist", 0.430);
     this->declare_parameter<float>("board.yDist", 0.830);
@@ -75,6 +78,7 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
 
     this->get_parameter("detect_markers", detect_markers_);
     this->get_parameter("detect_board", detect_board_);
+    this->get_parameter("visualize", visualize_);
 
 
     this->get_parameter("aruco.marker_size", marker_size_);
@@ -86,14 +90,42 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     std::vector<int> ids_(param_ids.begin(), param_ids.end());
 
     detector_params_ = cv::aruco::DetectorParameters::create();
-	detector_params_->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
+	  detector_params_->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
 
 
     aruco_detector_ = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_, detector_params_);
 
-    aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
+    board_ = aruco_detector_->createRectangularBoard(marker_size_, xDist_, yDist_, dictionary_, ids_);
+
+    if(detect_board_){
+        auto timer_callback = std::bind(&ArucoDetectorNode::kalmanFilterCallback, this);
+        auto timer = this->create_wall_timer(std::chrono::milliseconds(10), timer_callback); 
+    }
+
 }
 
+void aruco_detector::ArucoDetectorNode::kalmanFilterCallback()
+{
+  static rclcpp::Time previous_time = this->now();
+    rclcpp::Time current_time = this->now();
+    rclcpp::Duration time_since_previous_callback = current_time - previous_time;
+    previous_time = current_time;
+
+  auto [status, pose, stamp] = board_measurement_.getBoardPoseStamp();
+  switch(status) {
+    case BoardDetectionStatus::BOARD_NEVER_DETECTED:
+      return;
+    case BoardDetectionStatus::MEASUREMENT_AVAILABLE:
+      EKF::step(dynamic_model_, sensor_model_, time_since_previous_callback.seconds(),board_pose_, pose);
+      break;
+    case BoardDetectionStatus::MEASUREMENT_NOT_AVAILABLE:
+      EKF::predict(dynamic_model_, sensor_model_, time_since_previous_callback.seconds(), board_pose_);
+      break;
+  }
+    
+
+    
+  }
 
 
 void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
@@ -120,50 +152,74 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
         return;
     }
 
-    geometry_msgs::msg::PoseArray pose_array;
+
 
     // DEBUG: Draw detections on image
+  
+    // DEBUG: Draw detections on image
     // markers to vector transform will be done after refineBoardMarkers in case of recovered candidates
-    auto [marker_corners, rejected_candidates, marker_ids, rvecs, tvecs] = aruco_detector_->detectArucoMarkers(input_image_gray);
+    auto [marker_corners, rejected_candidates, marker_ids] = aruco_detector_->detectArucoMarkers(input_image_gray);
+
+    cv::Vec3d board_rvec, board_tvec;
     if(detect_board_ && marker_ids.size() > 0){
-    auto [valid, rvec, tvec] = aruco_detector_->estimateBoardPose(marker_corners, marker_ids);
-    RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Detected " << marker_ids.size() << " markers");
+    auto [valid, board_rvec, board_tvec] = aruco_detector_->estimateBoardPose(marker_corners, marker_ids);
+    if (valid > 0) {
+        Eigen::Vector<double,6> pose(6);
+        pose << board_tvec[0], board_tvec[1], board_tvec[2], board_rvec[0], board_rvec[1], board_rvec[2];
+        if(std::get<0>(board_measurement_.getBoardPoseStamp()) == BoardDetectionStatus::BOARD_NEVER_DETECTED){
+            board_pose_ = {pose,Eigen::Matrix<double,6,6>::Identity()};
+        }
+        else { 
+        rclcpp::Time stamp = msg->header.stamp;
+        board_measurement_.setBoardPoseStamp(std::make_tuple(BoardDetectionStatus::MEASUREMENT_AVAILABLE, pose, stamp));
 
-    if(valid > 0){
         std::vector<int> recovered_candidates = aruco_detector_->refineBoardMarkers(input_image_gray, marker_corners, marker_ids, rejected_candidates);
+           
+        }
+    }
+    else {
+        board_measurement_.setBoardStatus(BoardDetectionStatus::MEASUREMENT_NOT_AVAILABLE);
     }
     }
 
+
+    std::vector<cv::Vec3d> rvecs, tvecs;
+    cv::aruco::estimatePoseSingleMarkers(marker_corners, marker_size_, camera_matrix_, distortion_coefficients_, rvecs, tvecs);
+
+    geometry_msgs::msg::PoseArray pose_array;
 
     for (size_t i = 0; i < marker_ids.size(); i++)
     {
-        // Retrieve marker ID and pose
-        int marker_id = marker_ids[i];
         cv::Vec3d rvec = rvecs[i];
-        cv::Vec3d tvec = tvecs[i];
+        // cv::Vec3d tvec = tvecs[i];
 
         tf2::Quaternion quat = rvec_to_quat(rvec);
 
-        auto pose_msg = cv_pose_to_ros_pose_stamped(rvec, quat, frame_, marker_id);
+        auto pose_msg = cv_pose_to_ros_pose_stamped(rvec, quat, frame_, msg->header.stamp);
         pose_array.poses.push_back(pose_msg.pose);
     }
-        if(pose_array.poses.size() > 0){
-            pose_array.header.stamp = this->get_clock()->now();
-            pose_array.header.frame_id = "camera_link";
-        }
+
+        pose_array.header.stamp = msg->header.stamp;
+        pose_array.header.frame_id = frame_;
         pose_pub_->publish(pose_array);
 
+    if(visualize_){
 
     cv::aruco::drawDetectedMarkers(input_image, marker_corners, marker_ids);
-    for (size_t i = 0; i < marker_ids.size(); ++i)
-    {
+    cv::aruco::drawDetectedMarkers(input_image, rejected_candidates, cv::noArray(), cv::Scalar(100, 0, 255));
+    
+    for (size_t i = 0; i < marker_ids.size(); ++i){
         cv::aruco::drawAxis(input_image, camera_matrix_, distortion_coefficients_, rvecs[i], tvecs[i], 0.1);
     }
 
-    cv::aruco::drawDetectedMarkers(input_image, rejected_candidates, cv::noArray(), cv::Scalar(100, 0, 255));
+    if(detect_board_){
+    float length = cv::norm(board_->objPoints[0][0] - board_->objPoints[0][1]); // Visual length of the drawn axis
+	cv::aruco::drawAxis(input_image, camera_matrix_, distortion_coefficients_, board_rvec, board_tvec, length);
+    }
 
-    auto message = cv_bridge::CvImage(std_msgs::msg::Header(), "bgr8", input_image).toImageMsg();
+    auto message = cv_bridge::CvImage(msg->header, "bgr8", input_image).toImageMsg();
     marker_image_pub_->publish(*message);
+}
 }
 
 tf2::Quaternion aruco_detector::ArucoDetectorNode::rvec_to_quat(const cv::Vec3d &rvec) {
@@ -184,13 +240,13 @@ tf2::Quaternion aruco_detector::ArucoDetectorNode::rvec_to_quat(const cv::Vec3d 
     return quaternion;
 }
 
-geometry_msgs::msg::PoseStamped aruco_detector::ArucoDetectorNode::cv_pose_to_ros_pose_stamped(const cv::Vec3d &tvec, const tf2::Quaternion &quat, std::string frame_id, int marker_id) {
+geometry_msgs::msg::PoseStamped aruco_detector::ArucoDetectorNode::cv_pose_to_ros_pose_stamped(const cv::Vec3d &tvec, const tf2::Quaternion &quat, std::string frame_id, rclcpp::Time stamp) {
     // create the PoseStamped message
     geometry_msgs::msg::PoseStamped pose_msg;
 
     // fill in the header data
-    pose_msg.header.stamp = this->get_clock()->now();
-    pose_msg.header.frame_id = "camera_link";
+    pose_msg.header.stamp = stamp;
+    pose_msg.header.frame_id = frame_id;
 
     // fill in the position data
     pose_msg.pose.position.x = tvec[0];
