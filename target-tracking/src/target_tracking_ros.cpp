@@ -13,12 +13,12 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     declare_parameter<std::string>("topic_visualization_parameters", "target_tracking/parameters");
  
     declare_parameter<double>("clutter_rate", 0.001);
-    declare_parameter<double>("probability_of_detection", 0.75);
+    declare_parameter<double>("probability_of_detection", 0.7);
     declare_parameter<double>("probability_of_survival", 0.99);
-    declare_parameter<double>("gate_threshold", 1.5);
+    declare_parameter<double>("gate_threshold", 2.5);
     declare_parameter<double>("min_gate_threshold", 1.0);
-    declare_parameter<double>("max_gate_threshold", 2.0);
-    declare_parameter<double>("confirmation_threshold", 0.7);
+    declare_parameter<double>("max_gate_threshold", 10);
+    declare_parameter<double>("confirmation_threshold", 0.9);
     declare_parameter<double>("deletion_threshold", 0.1);
     declare_parameter<double>("std_velocity", 0.2);
     declare_parameter<double>("std_sensor", 0.5);

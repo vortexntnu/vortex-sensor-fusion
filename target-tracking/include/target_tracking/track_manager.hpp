@@ -16,8 +16,6 @@ struct Track {
     State4d state;
     double existence_probability;
     bool confirmed;
-    std::vector<Eigen::Vector2d> previous;
-
 
     // For sorting tracks based on existence probability and confirmed track
     bool operator<(const Track &other) const {

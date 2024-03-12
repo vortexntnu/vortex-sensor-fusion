@@ -3,10 +3,31 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, DeclareLaunchArgument
+
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
+
+    visualization = DeclareLaunchArgument(
+        'visualization',
+        default_value='false',
+        description='Enable visualization'
+    )
+
+    launch_pcl_detector = DeclareLaunchArgument(
+        'pcl_detector',
+        default_value='true',
+        description='Enable PCL detector'
+    )
+
+    launch_landmark_server = DeclareLaunchArgument(
+        'landmark_server',
+        default_value='true',
+        description='Enable landmark server'
+    )
+
+
     main_launch = LaunchDescription()
     
     pcl_detector_launch = IncludeLaunchDescription(
@@ -22,12 +43,14 @@ def generate_launch_description():
             parameters=[os.path.join(get_package_share_directory('target_tracking'),'params','target_tracking_params.yaml')],
             output='screen',
         )
+    
     target_tracking_visualization_node = Node(
             package='target_tracking_visualization',
             executable='target_tracking_visualization_node',
             name='target_tracking_visualization_node',
             output='screen',
         )
+    
     landmark_server_node = Node(
             package='landmark_server',
             executable='landmark_server_node',

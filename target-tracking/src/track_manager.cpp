@@ -39,9 +39,6 @@ void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements,
             measurements, 
             track.existence_probability, 
             config);
-        
-        // Add previous positions
-        track.previous.push_back(track.state.mean().head(2));
 
         // Update state
         track.state = x_final;
