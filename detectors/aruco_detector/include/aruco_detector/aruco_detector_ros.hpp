@@ -82,7 +82,7 @@ private:
     struct BoardPoseStamp{
     std::tuple<BoardDetectionStatus, Vector6d, rclcpp::Time> getBoardPoseStamp() const {
         std::lock_guard<std::mutex> lock(mutex_);
-        return {board_detection_status_, board_pose_, stamp_};
+        return {board_detection_status_, board_pose_meas_, stamp_};
     }
 
     void setBoardStatus(BoardDetectionStatus status) {
@@ -93,14 +93,14 @@ private:
     void setBoardPoseStamp(const std::tuple<BoardDetectionStatus, Vector6d, rclcpp::Time>& values) {
         std::lock_guard<std::mutex> lock(mutex_);
         board_detection_status_ = std::get<0>(values);
-        board_pose_ = std::get<1>(values);
+        board_pose_meas_ = std::get<1>(values);
         stamp_ = std::get<2>(values);
     }
     
     private:
         mutable std::mutex mutex_;
         BoardDetectionStatus board_detection_status_ = BoardDetectionStatus::BOARD_NEVER_DETECTED;
-        Vector6d board_pose_ = Vector6d::Zero(6); 
+        Vector6d board_pose_meas_ = Vector6d::Zero(6); 
         rclcpp::Time stamp_;
 };
 
@@ -120,7 +120,7 @@ private:
     BoardPoseStamp board_measurement_;
     std::shared_ptr<DynMod> dynamic_model_;
     std::shared_ptr<SensMod> sensor_model_;
-    vortex::prob::Gauss<6> board_pose_;
+    vortex::prob::Gauss<6> board_pose_est_;
 
 
     

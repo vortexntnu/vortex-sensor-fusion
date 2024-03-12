@@ -8,7 +8,7 @@ def generate_launch_description():
             package='aruco_detector',
             executable='aruco_detector_node',
             name='aruco_detector_node',
-            parameters=[os.path.join(get_package_share_directory('aruco_detector'),'params','aruco_detector_params.yaml')],
+            parameters=[os.path.join(get_package_share_directory('aruco_detector'),'params','aruco_parameters.yaml')],
             output='screen',
         )
     return LaunchDescription([

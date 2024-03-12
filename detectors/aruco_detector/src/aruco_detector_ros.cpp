@@ -10,7 +10,7 @@ namespace aruco_detector {
 ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
 {
     this->declare_parameter<std::string>("camera_frame", "camera_link");
-    this->declare_parameter<std::string>("image_topic", "/image_raw");
+    this->declare_parameter<std::string>("image_topic", "/flir_camera/image_raw");
     this->declare_parameter<std::string>("camera_info_topic", "/image_raw/camera_info");
 
     this->declare_parameter<float>("camera.fx", 1061.29517988700);
@@ -23,18 +23,20 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     this->declare_parameter<float>("distortion.p2", 0.0);
     this->declare_parameter<float>("distortion.k3", 0.000318839213604595);
 
-    this->declare_parameter<float>("aruco.marker_size", 0.150);
-    this->declare_parameter<std::string>("aruco.dictionary", "DICT_6X6_250");
+    this->declare_parameter<float>("aruco.marker_size", 0.167);
+    this->declare_parameter<std::string>("aruco.dictionary", "DICT_5X5_250");
 
-    this->declare_parameter<bool>("detect_board", false);
+    this->declare_parameter<bool>("detect_board", true);
     this->declare_parameter<bool>("detect_markers", true);
-    this->declare_parameter<float>("visualize", true);
+    this->declare_parameter<bool>("visualize", true);
 
-    this->declare_parameter<float>("board.xDist", 0.430);
-    this->declare_parameter<float>("board.yDist", 0.830);
+    this->declare_parameter<float>("board.xDist", 0.462);
+    this->declare_parameter<float>("board.yDist", 0.862);
     std::vector<int64_t> board_ids = {28, 7, 96, 19};
     this->declare_parameter("board.ids", board_ids);
 
+    this->declare_parameter("board.dynmod.stddev", 0.01);
+    this->declare_parameter("board.sensmod.stddev", 0.01);
 
     // Retrieve parameters
     float fx, fy, cx, cy, k1, k2, p1, p2, k3;
@@ -89,8 +91,14 @@ ArucoDetectorNode::ArucoDetectorNode() : Node("aruco_detector_node")
     // Convert int64_t vector to int vector
     std::vector<int> ids_(param_ids.begin(), param_ids.end());
 
+    double dynmod_stddev = this->get_parameter("board.dynmod.stddev").as_double();
+    double sensmod_stddev = this->get_parameter("board.sensmod.stddev").as_double();
+
+    dynamic_model_ = std::make_shared<DynMod>(dynmod_stddev);
+    sensor_model_ = std::make_shared<SensMod>(sensmod_stddev);
+
     detector_params_ = cv::aruco::DetectorParameters::create();
-	  detector_params_->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
+	detector_params_->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
 
 
     aruco_detector_ = std::make_unique<ArucoDetector>(dictionary_, marker_size_, camera_matrix_, distortion_coefficients_, detector_params_);
@@ -111,15 +119,15 @@ void aruco_detector::ArucoDetectorNode::kalmanFilterCallback()
     rclcpp::Duration time_since_previous_callback = current_time - previous_time;
     previous_time = current_time;
 
-  auto [status, pose, stamp] = board_measurement_.getBoardPoseStamp();
+  auto [status, board_pose_meas, stamp] = board_measurement_.getBoardPoseStamp();
   switch(status) {
     case BoardDetectionStatus::BOARD_NEVER_DETECTED:
       return;
     case BoardDetectionStatus::MEASUREMENT_AVAILABLE:
-      EKF::step(dynamic_model_, sensor_model_, time_since_previous_callback.seconds(),board_pose_, pose);
+      std::tie(board_pose_est_, std::ignore, std::ignore) = EKF::step(dynamic_model_, sensor_model_, time_since_previous_callback.seconds(),board_pose_est_, board_pose_meas);
       break;
     case BoardDetectionStatus::MEASUREMENT_NOT_AVAILABLE:
-      EKF::predict(dynamic_model_, sensor_model_, time_since_previous_callback.seconds(), board_pose_);
+      std::tie(board_pose_est_, std::ignore) = EKF::predict(dynamic_model_, sensor_model_, time_since_previous_callback.seconds(), board_pose_est_);
       break;
   }
     
@@ -148,7 +156,9 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
     }
     catch (cv_bridge::Exception &e)
     {
-        // ROS_ERROR("cv_bridge exception: %s", e.what());
+        RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "cv_bridge exception: " << e.what());
+
+        // RCLCPP_WARN(this->get_logger(), "cv_bridge exception: %s", e.what());
         return;
     }
 
@@ -167,7 +177,7 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
         Eigen::Vector<double,6> pose(6);
         pose << board_tvec[0], board_tvec[1], board_tvec[2], board_rvec[0], board_rvec[1], board_rvec[2];
         if(std::get<0>(board_measurement_.getBoardPoseStamp()) == BoardDetectionStatus::BOARD_NEVER_DETECTED){
-            board_pose_ = {pose,Eigen::Matrix<double,6,6>::Identity()};
+            board_pose_est_ = {pose,Eigen::Matrix<double,6,6>::Identity()};
         }
         else { 
         rclcpp::Time stamp = msg->header.stamp;
@@ -212,12 +222,15 @@ void aruco_detector::ArucoDetectorNode::imageCallback(const sensor_msgs::msg::Im
         cv::aruco::drawAxis(input_image, camera_matrix_, distortion_coefficients_, rvecs[i], tvecs[i], 0.1);
     }
 
+
+    auto message = cv_bridge::CvImage(msg->header, "bgr8", input_image).toImageMsg();
+
     if(detect_board_){
     float length = cv::norm(board_->objPoints[0][0] - board_->objPoints[0][1]); // Visual length of the drawn axis
 	cv::aruco::drawAxis(input_image, camera_matrix_, distortion_coefficients_, board_rvec, board_tvec, length);
+    board_image_pub_->publish(*message);
     }
 
-    auto message = cv_bridge::CvImage(msg->header, "bgr8", input_image).toImageMsg();
     marker_image_pub_->publish(*message);
 }
 }
