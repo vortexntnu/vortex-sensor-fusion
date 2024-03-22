@@ -46,52 +46,163 @@ static std::map<std::string, cv::aruco::PREDEFINED_DICTIONARY_NAME> dictionary_m
         {"DICT_7X7_1000", cv::aruco::DICT_7X7_1000},
         {"DICT_ARUCO_ORIGINAL", cv::aruco::DICT_ARUCO_ORIGINAL}};
 
+/**
+ * @class ArucoDetectorNode
+ * @brief ROS node for ArUco marker detection and pose estimation.
+ * 
+ * This class represents a ROS node that performs ArUco marker detection and pose estimation. Also supports detection of ArUco boards.
+ * It subscribes to image and camera info topics, and publishes marker poses, marker images, and board poses.
+ * It also provides functionalities for setting camera parameters, initializing the detector, setting visualization options,
+ * setting board detection options, initializing the board, initializing the models, and handling parameter events.
+ */
 class ArucoDetectorNode : public rclcpp::Node{
 
 public:
+    /**
+     * @brief Constructs an ArucoDetectorNode object.
+     */
     ArucoDetectorNode();
 
+    /**
+     * @brief Destroys the ArucoDetector object.
+     */
     ~ArucoDetectorNode(){};
 
     
 private: 
+    /**
+     * @brief Subscribes to image topic
+    */
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
+    /**
+     * @brief Subscribes to camera info topic
+    */
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
 
+    /**
+     * @brief Publishes marker poses as a PoseArray
+    */
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr marker_pose_pub_;
+    /**
+     * @brief Publishes the image with the markers visualized. Includes rejected candidates.
+    */
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr marker_image_pub_;
+    /**
+     * @brief Publishes the pose of the board
+    */
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr board_pose_pub_;
 
+    /**
+     * @brief Retrieves camera parameters from ros parameters and sets them. 
+     * Will most likely be overwritten by params from camera_info topic.
+    */
     void setCameraParams();
 
+    /**
+     * @brief Initialize the detector. Sets dictionary from ros param. Also creates detector parameters.
+    */
     void initializeDetector();
 
+    /**
+     * @brief Sets visualization flag from ros param
+    */
     void setVisualization();
 
+    /**
+     * @brief Set board detection flag from ros param
+    */
     void setBoardDetection();
 
+    /**
+     * @brief Initializes board from ros params
+    */
     void initializeBoard();
 
+    /**
+     * @brief Initializes dynamic and sensor models with std_dev from ros params
+    */
     void initializeModels();
 
+    /**
+     * @brief Function to toggle the kalman filter on/off, based on detect_board ros param and if the timer is active
+    */
     void toggleKalmanFilterCallback();
 
+    /**
+     * @brief Check and subscribe to camera topics if not yet subscribed. Allows for dynaminc reconfiguration of camera topics.
+     * 
+    */
     void checkAndSubscribeToCameraTopics();
 
+    /**
+     * @brief Set the frame to use for transforms to get correct pose
+    */
     void setFrame();
     
+    /**
+     * @brief Initialize the parameter handler and a parameter event callback.
+     * 
+    */
     void initializeParameterHandler();
-    
-    std::shared_ptr<rclcpp::ParameterEventHandler> param_handler_;
-    rclcpp::ParameterEventCallbackHandle::SharedPtr param_cb_handle_;
+    /**
+     * @brief Callback function for parameter events.
+     * Checks for parameter changes that matches the nodes' namespace and invokes the relevant initializer functions.
+     * 
+     * @param event The parameter event.
+    */  
     void onParameterEvent(const rcl_interfaces::msg::ParameterEvent &event);
 
+    /**
+     * @brief Manages parameter events for the node.
+     *
+     * This handle is used to set up a mechanism to listen for and react to changes in parameters. 
+     * Parameters can be used to configure the node's operational behavior dynamically, 
+     * allowing adjustments without altering the code. The `param_handler_` is responsible for 
+     * registering callbacks that are triggered on parameter changes, providing a centralized 
+     * management system within the node for such events.
+     */
+    std::shared_ptr<rclcpp::ParameterEventHandler> param_handler_;
+
+
+    /**
+     * @brief Handle to the registration of the parameter event callback.
+     *
+     * Represents a token or reference to the specific callback registration made with 
+     * the parameter event handler (`param_handler_`). This handle allows for management 
+     * of the lifecycle of the callback, such as removing the callback if it's no longer needed. 
+     * It ensures that the node can respond to parameter changes with the registered callback 
+     * in an efficient and controlled manner.
+     */
+    rclcpp::ParameterEventCallbackHandle::SharedPtr param_cb_handle_;
+    
+    /**
+     * @brief Callback function for image topic
+     * 
+     * @param msg The image message
+    */
     void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg);
+
+    /**
+     * @brief Callback function for camera info topic.
+     *  Sets camera matrix and distortion coefficients from camera info message and logs the params.
+     * 
+     * @param msg The camera info message
+    */
     void cameraInfoCallback(const sensor_msgs::msg::CameraInfo::SharedPtr msg);
+
+    /**
+     * @brief Timer callback function for the kalman filter to estimate the board pose.
+    */
     void kalmanFilterCallback();
 
+    /**
+     * @brief Function to convert a rotation vector to a quaternion
+    */
     tf2::Quaternion rvec_to_quat(const cv::Vec3d &rvec);
 
+    /**
+     * @brief Function to convert a translation vector and quaternion to a PoseStamped message
+    */
     geometry_msgs::msg::PoseStamped cv_pose_to_ros_pose_stamped(const cv::Vec3d &tvec, const tf2::Quaternion &quat, std::string frame_id, rclcpp::Time stamp);
 
 
@@ -140,6 +251,7 @@ private:
     float marker_size_;
     float xDist_,yDist_;
     std::vector<int64_t> ids_;
+    std::vector<int> ids_detected_;
     cv::Ptr<cv::aruco::Dictionary> dictionary_;
     std::string frame_;
     cv::Ptr<cv::aruco::DetectorParameters> detector_params_;

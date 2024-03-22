@@ -11,9 +11,9 @@ aruco_detector_node:
     # Flir camera
     camera:  
       intrinsic: [1050.0, 1050.0, 960.0, 540.0] # fx, fy, cx, cy
-      distortion: [0.000335365051980971, 0.000583836572965934, 0.0, 0.0, 0.000318839213604595] # k1, k2, p1, p2, k3
+      distortion: [-0.356890438215317, 0.168613819658546, 0.0, 0.0, -0.0441848241077346] # k1, k2, p1, p2, k3
 
-    detect_board: false  # Set to true to detect aruco boards
+    detect_board: true  # Set to true to detect aruco boards
     visualize: true  # Set to true to visualize the detected markers and board
 
       # TAC ARUCO PARAMETERS
