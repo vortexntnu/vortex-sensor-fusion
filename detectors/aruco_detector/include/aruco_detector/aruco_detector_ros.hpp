@@ -75,7 +75,7 @@ private:
     */
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub_;
     /**
-     * @brief Subscribes to camera info topic
+     * @brief Subscribes to camera info topic to retrieve and set camera parameters
     */
     rclcpp::Subscription<sensor_msgs::msg::CameraInfo>::SharedPtr camera_info_sub_;
 
@@ -84,7 +84,7 @@ private:
     */
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr marker_pose_pub_;
     /**
-     * @brief Publishes the image with the markers visualized. Includes rejected candidates.
+     * @brief Publishes the image with the markers visualized if visualization param is set. visualizes the board pose if board detection is set.
     */
     rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr marker_image_pub_;
     /**
@@ -93,13 +93,13 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr board_pose_pub_;
 
     /**
-     * @brief Retrieves camera parameters from ros parameters and sets them. 
+     * @brief Retrieves initial camera parameters from ros parameters and sets them. 
      * Will most likely be overwritten by params from camera_info topic.
     */
     void setCameraParams();
 
     /**
-     * @brief Initialize the detector. Sets dictionary from ros param. Also creates detector parameters.
+     * @brief Initialize the detector. Sets dictionary from ros param. Also initializes detector parameters.
     */
     void initializeDetector();
 
@@ -130,12 +130,13 @@ private:
 
     /**
      * @brief Check and subscribe to camera topics if not yet subscribed. Allows for dynaminc reconfiguration of camera topics.
+     * If new topics are set, the old subscriptions are cancelled and new ones are bound to the callback functions.
      * 
     */
     void checkAndSubscribeToCameraTopics();
 
     /**
-     * @brief Set the frame to use for transforms to get correct pose
+     * @brief Set the frame to use for transforms to get correct pose of markers and board.
     */
     void setFrame();
     
@@ -146,7 +147,7 @@ private:
     void initializeParameterHandler();
     /**
      * @brief Callback function for parameter events.
-     * Checks for parameter changes that matches the nodes' namespace and invokes the relevant initializer functions.
+     * Checks for parameter changes that matches the nodes' namespace and invokes the relevant initializer functions to update member variables.
      * 
      * @param event The parameter event.
     */  
@@ -192,6 +193,7 @@ private:
 
     /**
      * @brief Timer callback function for the kalman filter to estimate the board pose.
+     *  Gives a more stable output of board pose benefitial for control applications.
     */
     void kalmanFilterCallback();
 
@@ -216,17 +218,35 @@ private:
         MEASUREMENT_NOT_AVAILABLE,
     };
 
+    /**
+     * @brief Struct to store the board pose, status and timestamp using in kalmanFilterCallback function.
+    */
     struct BoardPoseStamp{
     std::tuple<BoardDetectionStatus, Vector6d, rclcpp::Time> getBoardPoseStamp() const {
         std::lock_guard<std::mutex> lock(struct_mutex_);
         return {board_detection_status_, board_pose_meas_, stamp_};
     }
 
+    /**
+     * @brief Sets the board status. Used when board is not detected 
+     * to set status to MEASUREMENT_NOT_AVAILABLE
+     *  
+     * 
+     * @param status The board status
+    */
     void setBoardStatus(BoardDetectionStatus status) {
         std::lock_guard<std::mutex> lock(struct_mutex_);
         board_detection_status_ = status;
     }
     
+    /**
+     * @brief Sets all variables of the struct simultaneously to ensure thread safety
+     *      when retrieved in kalmanFilterCallback.
+     *  
+     * 
+     * 
+     * @param values A tuple containing the board status, pose and timestamp
+    */
     void setBoardPoseStamp(const std::tuple<BoardDetectionStatus, Vector6d, rclcpp::Time>& values) {
         std::lock_guard<std::mutex> lock(struct_mutex_);
         board_detection_status_ = std::get<0>(values);

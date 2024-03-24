@@ -50,6 +50,8 @@ public:
      * @param marker_ids The IDs of the detected markers.
      * @param board The ArUco board.
      * @return A tuple containing the number of markers used for pose estimation, the translation vector, and the rotation vector.
+     *  If the number is greater than 0, a board post has been estimated and the translation and rotation vectors contain the estimated pose.
+     *  
      */
     std::tuple<int, cv::Vec3d, cv::Vec3d> estimateBoardPose(std::vector<std::vector<cv::Point2f>> marker_corners, std::vector<int> marker_ids, const cv::Ptr<cv::aruco::Board> &board);
 
@@ -67,7 +69,7 @@ public:
 
     /**
      * @brief Tries to recover rejected markers from the rejected candidates. 
-     *  If one detected marker is from the board. Rejected candidates can be detected if they are in the board.
+     *  If one detected marker is from the board, we can use it to estimate rejected candidates from within the board.
      * 
      * @param input_image The input image.
      * @param corners The detected marker corners.
@@ -81,8 +83,8 @@ public:
 private:
     cv::Ptr<cv::aruco::Dictionary> dictionary_; /**< The dictionary of ArUco markers. */
     float marker_size_; /**< The size of the markers in meters. */
-    float xDist_; /**< The distance between markers along the X-axis. */
-    float yDist_; /**< The distance between markers along the Y-axis. */
+    float xDist_; /**< The distance between markers in the board along the X-axis. */
+    float yDist_; /**< The distance between markers in the board along the Y-axis. */
     cv::Mat camera_matrix_; /**< The camera matrix. */
     cv::Mat distortion_coeffs_; /**< The distortion coefficients. */
     cv::Ptr<cv::aruco::DetectorParameters> detector_params_; /**< The parameters for the marker detector. */

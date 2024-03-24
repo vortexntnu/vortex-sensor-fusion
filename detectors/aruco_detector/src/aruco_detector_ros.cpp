@@ -152,7 +152,8 @@ void ArucoDetectorNode::initializeDetector() {
 
     detector_params_ = cv::aruco::DetectorParameters::create();
 
-    // Only need accurate aruco pose estimation if board detection is enabled
+    // Only need accurate aruco pose estimation if board detection is enabled,
+    // since operation is time consuming
     if(detect_board_){
         detector_params_->cornerRefinementMethod = cv::aruco::CORNER_REFINE_SUBPIX;
     }
