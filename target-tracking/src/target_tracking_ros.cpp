@@ -17,7 +17,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("probability_of_survival", 0.99);
     declare_parameter<double>("gate_threshold", 2.5);
     declare_parameter<double>("min_gate_threshold", 1.0);
-    declare_parameter<double>("max_gate_threshold", 10);
+    declare_parameter<double>("max_gate_threshold", 10.0);
     declare_parameter<double>("confirmation_threshold", 0.9);
     declare_parameter<double>("deletion_threshold", 0.1);
     declare_parameter<double>("std_velocity", 0.2);
