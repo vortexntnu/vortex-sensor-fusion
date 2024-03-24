@@ -32,8 +32,8 @@ void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements,
         
         // Predict next state
         auto [x_final, existence_probability, inside, outside, x_pred, z_pred, x_updated] = 
-            IPDA::step(dyn_model_, 
-            sensor_model_,
+            IPDA::step(*dyn_model_, 
+            *sensor_model_,
             update_interval / 1000.0,
             track.state, 
             measurements, 

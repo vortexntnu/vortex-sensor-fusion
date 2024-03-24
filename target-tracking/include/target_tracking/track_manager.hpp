@@ -7,7 +7,7 @@
 
 using State4d = vortex::prob::Gauss4d;
 using State2d = vortex::prob::Gauss<2>;
-using DynMod = vortex::models::ConstantVelocity<2>;
+using DynMod = vortex::models::ConstantVelocity;
 using SensorMod = vortex::models::IdentitySensorModel<4, 2>;
 using IPDA = vortex::filter::IPDA<DynMod, SensorMod>;
 
