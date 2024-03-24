@@ -72,5 +72,3 @@ def generate_launch_description():
         landmark_server_node,
         target_tracking_visualization_node,
     ])
-    
-generate_launch_description()
