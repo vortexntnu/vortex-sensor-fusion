@@ -11,11 +11,19 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
     
+    default_params_file = os.path.join(get_package_share_directory('sensor_fusion_launch'),'params','target_tracking_params.yaml')
+    params_file = LaunchConfiguration('params_file')
+    params_file_arg = DeclareLaunchArgument(
+        'params_file',
+        default_value=default_params_file,
+        description='name or path to the parameters file to use.'
+    )
+    
     target_tracking_node = Node(
         package='target_tracking',
         executable='target_tracking_node',
         name='target_tracking_node',
-        parameters=[os.path.join(get_package_share_directory('sensor_fusion_launch'),'params','target_tracking_params.yaml')],
+        parameters=[params_file],
         output='screen',
     )
     
@@ -23,21 +31,21 @@ def generate_launch_description():
     enable_pcl_detector_arg = DeclareLaunchArgument(
         'pcl_detector',
         default_value='true',
-        description='Enable PCL detector'
+        description='enable PCL detector'
     )
 
     enable_landmark_server = LaunchConfiguration('landmark_server')
     enable_landmark_server_arg = DeclareLaunchArgument(
         'landmark_server',
         default_value='false',
-        description='Enable landmark server',
+        description='enable landmark server',
     )
     
     enable_visualization = LaunchConfiguration('visualization')
     enable_visualization_arg = DeclareLaunchArgument(
         'visualization',
         default_value='false',
-        description='Enable visualization'
+        description='enable visualization'
     )
     
     pcl_detector_launch = IncludeLaunchDescription(
