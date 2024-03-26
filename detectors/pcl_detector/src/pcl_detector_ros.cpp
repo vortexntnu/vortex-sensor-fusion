@@ -136,7 +136,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
     pcl::toROSMsg(detections, centroids_cloud_msg);
     centroids_cloud_msg.header.frame_id = cloud_msg->header.frame_id;
-    centroids_cloud_msg.header.stamp = rclcpp::Clock().now();
+    centroids_cloud_msg.header.stamp = cloud_msg->header.stamp;
 
     publisher_->publish(centroids_cloud_msg);
 }
