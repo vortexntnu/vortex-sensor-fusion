@@ -12,6 +12,8 @@
 #include <pcl_detector/detectors/dbscan_detector.hpp>
 #include <pcl_detector/detectors/euclidean_clustering.hpp>
 
+#include <pcl_detector/pcl_processor.hpp>
+
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -19,6 +21,15 @@
 
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/header.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+
+#include <visualization_msgs/msg/marker_array.hpp>
+
+#include <tf2_ros/transform_listener.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/buffer.h>
+
+
 
 enum class DetectorType {
     Euclidean,
@@ -64,6 +75,19 @@ class PclDetectorNode : public rclcpp::Node
 
     rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
 
+    geometry_msgs::msg::PoseArray getWallPoses(std::vector<pcl::PointXYZ> wall_poses);
+
+    std::tuple<Eigen::Vector3f, Eigen::Quaternionf> calculateTransformation(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg);
+
+    void processLine(const Eigen::VectorXf& line, std::vector<int> inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
+
+    void publishLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
+
+    void publishWallMarkerArray(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
+
+
+
+
  
     // ROS2 subscriber and related topic name
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
@@ -73,11 +97,26 @@ class PclDetectorNode : public rclcpp::Node
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
     std::string param_topic_pointcloud_out_;
 
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr line_publisher;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr wall_publisher;
+
+    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_publisher_;
+
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_callback_handle_;
 
     std::unique_ptr<pcl_detector::IPclDetector> detector_;
 
+    pcl_detector::PclProcessor processor_;
+
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    geometry_msgs::msg::TransformStamped prev_transform_;
+
     bool parameters_changed_ = false;
+
+    std::vector<Eigen::VectorXf> current_lines_;
+    std::vector<Eigen::VectorXf> prev_lines_;
+    geometry_msgs::msg::PoseArray wall_poses_;
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },
