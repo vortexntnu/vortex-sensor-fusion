@@ -77,13 +77,21 @@ class PclDetectorNode : public rclcpp::Node
 
     geometry_msgs::msg::PoseArray getWallPoses(std::vector<pcl::PointXYZ> wall_poses);
 
+    void transformLines(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg, std::vector<Eigen::VectorXf>& prev_lines);
+
+
     std::tuple<Eigen::Vector3f, Eigen::Quaternionf> calculateTransformation(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg);
 
     void processLine(const Eigen::VectorXf& line, std::vector<int> inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
 
     void publishLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
+    void publishtfLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
 
     void publishWallMarkerArray(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
+    geometry_msgs::msg::Point ExtendLineFromOriginToLength(const geometry_msgs::msg::Point& point, double length);
+    void publishExtendedLinesFromOrigin(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
+
+
 
 
 
@@ -98,7 +106,9 @@ class PclDetectorNode : public rclcpp::Node
     std::string param_topic_pointcloud_out_;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr line_publisher;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr tf_line_publisher;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr wall_publisher;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr wall_cone_publisher;
 
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_publisher_;
 
@@ -106,11 +116,10 @@ class PclDetectorNode : public rclcpp::Node
 
     std::unique_ptr<pcl_detector::IPclDetector> detector_;
 
-    pcl_detector::PclProcessor processor_;
+    std::unique_ptr<PclProcessor> processor_;
 
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-    geometry_msgs::msg::TransformStamped prev_transform_;
 
     bool parameters_changed_ = false;
 

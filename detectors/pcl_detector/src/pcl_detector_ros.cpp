@@ -21,7 +21,22 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   declare_parameter<int>("dbscan.min_points", 20);
   declare_parameter<float>("euclidean.cluster_tolerance", 1.0);
   declare_parameter<int>("euclidean.min_points", 25);
-  declare_parameter<float>("leaf_size", 0.1);
+
+
+  declare_parameter<float>("processor.voxel_leaf_size", 0.1);
+  declare_parameter<float>("processor.model_thresh", 0.5);
+  declare_parameter<int>("processor.model_iterations", 10);
+  declare_parameter<float>("processor.prev_line_thresh", 0.5);
+  declare_parameter<float>("processor.project_thresh", 0.5);
+  declare_parameter<float>("processor.wall_min_dist", 0.5);
+  declare_parameter<int>("processor.wall_min_points", 50);
+
+  declare_parameter<bool>("transform_lines", true);
+  declare_parameter<int>("transform_timeout_nsec", 50000000);
+  declare_parameter<int>("prev_line_min_inliers", 50);
+  declare_parameter<int>("new_lines", 1);
+
+
 
   param_topic_pointcloud_in_ = get_parameter("topic_pointcloud_in").as_string();
   param_topic_pointcloud_out_ = get_parameter("topic_pointcloud_out").as_string();
@@ -36,7 +51,11 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
     param_topic_pointcloud_in_, qos, std::bind(&PclDetectorNode::topic_callback, this, _1));
     pose_array_publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("wall_poses", 10);
     line_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("line_marker_array", 10);
+    tf_line_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("tf_line_marker_array", 10);
+
     wall_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("wall_marker_array", 10);
+    wall_cone_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("wall_marker_cone", 10);
+
 
   // Define a handle for validating parameters during runtime  
   on_set_callback_handle_ = add_on_set_parameters_callback(std::bind(&PclDetectorNode::parametersCallback, this, std::placeholders::_1));
@@ -46,19 +65,29 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   get_parameter<std::string>("detector", detector);
   detector_ = initialize_detector(detector);
 
-  processor_ = PclProcessor();
+  // Initialize the PclProcessor
+  float voxel_leaf_size = this->get_parameter("processor.voxel_leaf_size").as_double();
+  float model_thresh = this->get_parameter("processor.model_thresh").as_double();
+  int model_iterations = this->get_parameter("processor.model_iterations").as_int();
+  float prev_line_thresh = this->get_parameter("processor.prev_line_thresh").as_double();
+  float project_thresh = this->get_parameter("processor.project_thresh").as_double();
+  float wall_min_dist = this->get_parameter("processor.wall_min_dist").as_double();
+  int wall_min_points = this->get_parameter("processor.wall_min_points").as_int();
+
+
+  processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, prev_line_thresh, project_thresh, wall_min_dist, wall_min_points);
 
   // Initialize transform listener
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     // Set initial prev_transform_ to dummy values
-    prev_transform_.transform.translation.x = 0.0;
-    prev_transform_.transform.translation.y = 0.0;
-    prev_transform_.transform.translation.z = 0.0;
-    prev_transform_.transform.rotation.x = 0.0;
-    prev_transform_.transform.rotation.y = 0.0;
-    prev_transform_.transform.rotation.z = 0.0;
-    prev_transform_.transform.rotation.w = 1.0;
+    // prev_transform_.transform.translation.x = 0.0;
+    // prev_transform_.transform.translation.y = 0.0;
+    // prev_transform_.transform.translation.z = 0.0;
+    // prev_transform_.transform.rotation.x = 0.0;
+    // prev_transform_.transform.rotation.y = 0.0;
+    // prev_transform_.transform.rotation.z = 0.0;
+    // prev_transform_.transform.rotation.w = 1.0;
 }
 
 // Callback function for parameter changes
@@ -134,39 +163,91 @@ geometry_msgs::msg::PoseArray PclDetectorNode::getWallPoses(std::vector<pcl::Poi
     return pose_array;
 }
 
-std::tuple<Eigen::Vector3f, Eigen::Quaternionf> PclDetectorNode::calculateTransformation(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg)
+// std::tuple<Eigen::Vector3f, Eigen::Quaternionf> PclDetectorNode::calculateTransformation(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg)
+// {
+//     std::string fixed_frame = "world_frame";
+//     geometry_msgs::msg::TransformStamped current_transform;
+
+//     try {
+//         current_transform = tf_buffer_->lookupTransform(fixed_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp, rclcpp::Duration(1, 0));
+//     } catch (tf2::TransformException &ex) {
+//         RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Could not retrieve transform for point cloud, using previous lines: %s", ex.what());
+//         return std::make_tuple(Eigen::Vector3f(0, 0, 0), Eigen::Quaternionf(1, 0, 0, 0));
+//     }
+//     static geometry_msgs::msg::TransformStamped prev_transform = current_transform;
+
+//     Eigen::Vector3f translation(
+//         current_transform.transform.translation.x - prev_transform.transform.translation.x,
+//         current_transform.transform.translation.y - prev_transform.transform.translation.y,
+//         current_transform.transform.translation.z - prev_transform.transform.translation.z);
+
+//     tf2::Quaternion q_current, q_last, q_delta;
+//     tf2::fromMsg(current_transform.transform.rotation, q_current);
+//     tf2::fromMsg(prev_transform.transform.rotation, q_last);
+//     q_delta = q_last.inverse() * q_current;
+//     Eigen::Quaternionf rotation(q_delta.w(), q_delta.x(), q_delta.y(), q_delta.z());
+
+//     prev_transform = current_transform;
+
+//     return std::make_tuple(translation, rotation);
+// }
+void PclDetectorNode::transformLines(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg, std::vector<Eigen::VectorXf>& prev_lines)
 {
+    // Calculate the transformation between the current and previous point cloud
+    auto [translation, rotation] = calculateTransformation(cloud_msg);
+
+    // Transform the previously detected lines to the current frame
+    GeometryProcessor::transformLines(prev_lines, translation, rotation);
+}
+
+std::tuple<Eigen::Vector3f, Eigen::Quaternionf> PclDetectorNode::calculateTransformation(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg) {
     std::string fixed_frame = "world_frame";
     geometry_msgs::msg::TransformStamped current_transform;
+    static geometry_msgs::msg::TransformStamped prev_transform;
+    static bool isFirstRun = true; // Tracks the first run or successful retrieval.
+    int transform_timeout_nsec = this->get_parameter("transform_timeout_nsec").as_int();
 
     try {
-        current_transform = tf_buffer_->lookupTransform(fixed_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp, rclcpp::Duration(1, 0));
+        // Attempt to retrieve the transform, timeouted at 50ms
+        current_transform = tf_buffer_->lookupTransform(fixed_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp, rclcpp::Duration(0, transform_timeout_nsec));
+        
+        // If it's not the first run and we successfully get the transform:
+        if (!isFirstRun) {
+            Eigen::Vector3f translation(
+                current_transform.transform.translation.x - prev_transform.transform.translation.x,
+                current_transform.transform.translation.y - prev_transform.transform.translation.y,
+                current_transform.transform.translation.z - prev_transform.transform.translation.z);
+
+            tf2::Quaternion q_current, q_last, q_delta;
+            tf2::fromMsg(current_transform.transform.rotation, q_current);
+            tf2::fromMsg(prev_transform.transform.rotation, q_last);
+            q_delta = q_last.inverse() * q_current;
+            Eigen::Quaternionf rotation(q_delta.w(), q_delta.x(), q_delta.y(), q_delta.z());
+
+            prev_transform = current_transform; // Update prev_transform for next time
+
+            return std::make_tuple(translation, rotation);
+        } else {
+            // It's the first successful retrieval; just update the flag and prev_transform.
+            isFirstRun = false;
+            prev_transform = current_transform;
+            // Return a default or neutral transformation indicating no movement.
+            return std::make_tuple(Eigen::Vector3f(0, 0, 0), Eigen::Quaternionf(1, 0, 0, 0));
+        }
     } catch (tf2::TransformException &ex) {
-        RCLCPP_ERROR_STREAM(this->get_logger(), "Could not retrieve transform for point cloud: " << ex.what());
-        throw std::runtime_error("Failed to retrieve transform");
+        RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Could not retrieve transform for previous lines: %s", ex.what());
+        // In case of failure, return a default transformation or indicate the error appropriately.
+        isFirstRun = false; // Ensure we don't treat the next run as the first run.
+        return std::make_tuple(Eigen::Vector3f(0, 0, 0), Eigen::Quaternionf(1, 0, 0, 0));
     }
-
-    Eigen::Vector3f translation(
-        current_transform.transform.translation.x - prev_transform_.transform.translation.x,
-        current_transform.transform.translation.y - prev_transform_.transform.translation.y,
-        current_transform.transform.translation.z - prev_transform_.transform.translation.z);
-
-    tf2::Quaternion q_current, q_last, q_delta;
-    tf2::fromMsg(current_transform.transform.rotation, q_current);
-    tf2::fromMsg(prev_transform_.transform.rotation, q_last);
-    q_delta = q_last.inverse() * q_current;
-    Eigen::Quaternionf rotation(q_delta.w(), q_delta.x(), q_delta.y(), q_delta.z());
-
-    prev_transform_ = current_transform;
-
-    return std::make_tuple(translation, rotation);
 }
 
 void PclDetectorNode::processLine(const Eigen::VectorXf& line, const std::vector<int> inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
-    auto [optimized_coefficients, wall_indices, wall_poses] = processor_.handleLine(line, inliers, cloud);
+    auto [optimized_coefficients, wall_indices, wall_poses] = processor_->handleLine(line, inliers, cloud);
     geometry_msgs::msg::PoseArray ros_wall_poses = getWallPoses(wall_poses);
     wall_poses_.poses.insert(wall_poses_.poses.end(), ros_wall_poses.poses.begin(), ros_wall_poses.poses.end());
+    processor_->extractWalls(cloud, wall_indices);
     
     // Use a set to accumulate unique indices to remove
     std::set<int> indices_to_remove_set;
@@ -181,8 +262,8 @@ void PclDetectorNode::processLine(const Eigen::VectorXf& line, const std::vector
         Eigen::Vector3f P2(wall_end.x, wall_end.y, 0);     // Ending point of the wall segment
 
         // Add indices to the set instead of directly extracting them
-        // auto temp_indices = processor_.getPointsBehindWall(cloud, P1, P2);
-        // indices_to_remove_set.insert(temp_indices->indices.begin(), temp_indices->indices.end());
+        auto temp_indices = processor_->getPointsBehindWall(cloud, wall_start, wall_end);
+        indices_to_remove_set.insert(temp_indices->indices.begin(), temp_indices->indices.end());
     }
 
     // Convert the set to PointIndices for extraction
@@ -190,9 +271,9 @@ void PclDetectorNode::processLine(const Eigen::VectorXf& line, const std::vector
     indices_to_remove->indices.assign(indices_to_remove_set.begin(), indices_to_remove_set.end());
 
     // Perform the extraction only once using the accumulated indices
-    // if (!indices_to_remove->indices.empty()) {
-    //     processor_.extractPointsBehindWall(cloud, indices_to_remove);
-    // }
+    if (!indices_to_remove->indices.empty()) {
+        processor_->extractPointsBehindWall(cloud, indices_to_remove);
+    }
 
     if (!wall_poses.empty()) {
         current_lines_.push_back(optimized_coefficients);
@@ -239,6 +320,120 @@ void PclDetectorNode::publishLineMarkerArray(const std::vector<Eigen::VectorXf>&
     line_publisher->publish(marker_array);
 }
 
+void PclDetectorNode::publishtfLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id) {
+    visualization_msgs::msg::MarkerArray marker_array;
+    int id = 0; // Unique ID for each marker
+
+    for (const auto& line : lines) {
+        visualization_msgs::msg::Marker line_marker;
+        line_marker.header.frame_id = frame_id;
+        line_marker.header.stamp = this->get_clock()->now();
+        line_marker.ns = "line_markers";
+        line_marker.id = id++;
+        line_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+        line_marker.action = visualization_msgs::msg::Marker::ADD;
+
+        line_marker.scale.x = 0.2; // Line width
+
+        // Color the line
+        line_marker.color.r = 0.0;
+        line_marker.color.g = 0.0;
+        line_marker.color.b = 1.0;
+        line_marker.color.a = 1.0; // Don't forget to set the alpha!
+
+        // Assuming each line is defined by start and end points (adapt as needed)
+        geometry_msgs::msg::Point start, end;
+        start.x = line[0]+line[3]*-3; // Adapt based on your representation
+        start.y = line[1]+line[4]*-3;
+        start.z = line[2]+line[5]*-3;
+        end.x = line[0]+line[3]*3;
+        end.y = line[1]+line[4]*3;
+        end.z = line[2]+line[5]*3;
+        line_marker.points.push_back(start);
+        line_marker.points.push_back(end);
+
+        // Add the current line marker to the array
+        marker_array.markers.push_back(line_marker);
+    }
+
+    // Publish the MarkerArray
+    tf_line_publisher->publish(marker_array);
+}
+
+void PclDetectorNode::publishExtendedLinesFromOrigin(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id) {
+    visualization_msgs::msg::MarkerArray marker_array;
+    int id = 0; // Unique ID for each marker
+
+    for (size_t i = 0; i < pose_array.poses.size(); i += 2) {
+        if (i + 1 >= pose_array.poses.size()) {
+            break; // Prevent going out of bounds if there's an odd number of poses
+        }
+        auto& start_pose = pose_array.poses[i];
+        auto& end_pose = pose_array.poses[i + 1];
+
+        // Process start and end points to extend lines from origin
+        geometry_msgs::msg::Point extended_point_1 = ExtendLineFromOriginToLength(start_pose.position, 100.0);
+        geometry_msgs::msg::Point extended_point_2 = ExtendLineFromOriginToLength(end_pose.position, 100.0);
+
+
+        // Store the extended points for further use
+        std::vector<geometry_msgs::msg::Point> extended_points = {extended_point_1, extended_point_2};
+
+        for (auto& extended_point : extended_points) {
+            visualization_msgs::msg::Marker line_marker;
+            line_marker.header.frame_id = frame_id;
+            line_marker.header.stamp = this->get_clock()->now();
+            line_marker.ns = "extended_lines";
+            line_marker.id = id++;
+            line_marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+            line_marker.action = visualization_msgs::msg::Marker::ADD;
+
+            line_marker.scale.x = 0.1; // Adjust line width as needed
+
+            // Set the line color
+            line_marker.color.r = 0.0;
+            line_marker.color.g = 0.0;
+            line_marker.color.b = 1.0;
+            line_marker.color.a = 1.0;
+
+            // Origin point
+            geometry_msgs::msg::Point origin;
+            origin.x = 0.0;
+            origin.y = 0.0;
+            origin.z = 0.0;
+
+            // Define the line from origin through the point and extending out to the specified length
+            line_marker.points.push_back(origin);
+            line_marker.points.push_back(extended_point); // Extended point
+
+            // Add the current line marker to the array
+            marker_array.markers.push_back(line_marker);
+        }
+    }
+
+    // Publish the MarkerArray
+    wall_publisher->publish(marker_array);
+}
+
+geometry_msgs::msg::Point PclDetectorNode::ExtendLineFromOriginToLength(const geometry_msgs::msg::Point& point, double length) {
+    // Calculate the magnitude of the vector from origin to point
+    double magnitude = sqrt(point.x * point.x + point.y * point.y + point.z * point.z);
+    
+    // Normalize the vector, then scale it to the new length
+    geometry_msgs::msg::Point extended_point;
+    if (magnitude > 0) { // Avoid division by zero
+        extended_point.x = (point.x / magnitude) * length;
+        extended_point.y = (point.y / magnitude) * length;
+        extended_point.z = (point.z / magnitude) * length;
+    } else {
+        // In case the point is at the origin, we return the original point to avoid division by zero
+        extended_point = point;
+    }
+    
+    return extended_point;
+}
+
+
 void PclDetectorNode::publishWallMarkerArray(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id) {
     visualization_msgs::msg::MarkerArray marker_array;
     int id = 0; // Unique ID for each marker
@@ -283,7 +478,7 @@ void PclDetectorNode::publishWallMarkerArray(const geometry_msgs::msg::PoseArray
     }
 
     // Publish the MarkerArray
-    wall_publisher->publish(marker_array);
+    wall_cone_publisher->publish(marker_array);
 }
 
 
@@ -306,43 +501,46 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     pcl::fromROSMsg(*cloud_msg, *cartesian_cloud);
     RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Received PointCloud with " << cartesian_cloud->size() << " points");
     
-    processor_.applyPassThrough(cartesian_cloud, "z", -2.0, 5.0);
-    processor_.applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
-    processor_.applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
+    // processor_.applyPassThrough(cartesian_cloud, "z", -2.0, 5.0);
+    // processor_.applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
+    // processor_.applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
 
     // set height to 1? Might affect the clustering
-    processor_.flattenPointCloud(*cartesian_cloud, 0.0);
+    processor_->flattenPointCloud(*cartesian_cloud, 0.0);
 
-    float m_leaf_size = this->get_parameter("leaf_size").as_double();
-    processor_.applyVoxelGrid(cartesian_cloud, m_leaf_size);
+    processor_->applyVoxelGrid(cartesian_cloud);
 
-    // Calculate the transformation between the current and previous point cloud
-    auto [translation, rotation] = calculateTransformation(cloud_msg);
-
-    // Transform the previously detected lines to the current frame
-    std::vector<Eigen::VectorXf> transformed_lines = GeometryProcessor::transformLines(prev_lines_, translation, rotation);
+    bool transform_lines = this->get_parameter("transform_lines").as_bool();
+    if (!transform_lines) {
+      transformLines(cloud_msg, prev_lines_);
+      publishtfLineMarkerArray(prev_lines_, cloud_msg->header.frame_id);
+    }
 
     // Sort the lines by proximity to the origin so we remove closest walls first
-    GeometryProcessor::sortLinesByProximityToOrigin(transformed_lines);
+    GeometryProcessor::sortLinesByProximityToOrigin(prev_lines_);
 
     //Some pcl functions can't hanlde NaN values, so we remove them
-    std::vector<int> indices = processor_.removeNanPoints(cartesian_cloud);
+    std::vector<int> indices = processor_->removeNanPoints(cartesian_cloud);
+    int min_inliers = this->get_parameter("prev_line_min_inliers").as_int();
 
-    for (const auto& line : transformed_lines) {
-        auto inliers = processor_.findInliers(line, cartesian_cloud);
-        if(inliers.size() > 20){
+    for (const auto& line : prev_lines_) {
+        auto inliers = processor_->findInliers(line, cartesian_cloud);
+        // processLine(line, inliers, cartesian_cloud);
+        if(inliers.size() > u_int16_t(min_inliers)){
         processLine(line, inliers, cartesian_cloud);
         }
     }
 
     // Set how many new lines to find for each callback
-    for (int i = 0; i < 1; i++) {
-        auto [coefficients, inliers] = processor_.findLineWithMSAC(cartesian_cloud);
+    int new_lines = this->get_parameter("new_lines").as_int();
+    for (int i = 0; i < new_lines; i++) {
+        auto [coefficients, inliers] = processor_->findLineWithMSAC(cartesian_cloud);
         processLine(coefficients, inliers, cartesian_cloud);
     }
 
     publishLineMarkerArray(current_lines_, cloud_msg->header.frame_id);
     publishWallMarkerArray(wall_poses_, cloud_msg->header.frame_id);
+    publishExtendedLinesFromOrigin(wall_poses_, cloud_msg->header.frame_id);
 
     prev_lines_ = current_lines_;
     current_lines_.clear();

@@ -4,6 +4,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/segmentation/extract_polygonal_prism_data.h>
 
 #include <pcl/sample_consensus/msac.h>
 #include <pcl/sample_consensus/sac_model_line.h>
@@ -14,6 +15,13 @@
 
 
 namespace pcl_detector {
+
+PclProcessor::PclProcessor(float voxel_leaf_size, float model_thresh, int model_iterations,
+                 float prev_line_thresh, float project_thresh, float wall_min_dist, int wall_min_points)
+    : voxel_leaf_size_(voxel_leaf_size), model_thresh_(model_thresh),
+      model_iterations_(model_iterations), prev_line_thresh_(prev_line_thresh),
+      project_thresh_(project_thresh), wall_min_dist_(wall_min_dist),
+      wall_min_points_(wall_min_points) {}
 
 std::vector<int> PclProcessor::removeNanPoints(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
@@ -40,11 +48,11 @@ void PclProcessor::flattenPointCloud(pcl::PointCloud<pcl::PointXYZ>& cloud, floa
     }
 }
 
-void pcl_detector::PclProcessor::applyVoxelGrid(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, float leaf_size)
+void pcl_detector::PclProcessor::applyVoxelGrid(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
     pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
     voxel_grid.setInputCloud(cloud);
-    voxel_grid.setLeafSize(leaf_size, leaf_size, leaf_size);
+    voxel_grid.setLeafSize(voxel_leaf_size_, voxel_leaf_size_, voxel_leaf_size_);
 
     // Use the same point cloud object for the output
     voxel_grid.filter(*cloud);
@@ -59,8 +67,8 @@ std::tuple<Eigen::VectorXf, std::vector<int>> pcl_detector::PclProcessor::findLi
 
     // Create the MSAC object
     pcl::MEstimatorSampleConsensus<pcl::PointXYZ> msac(model_l);
-    msac.setDistanceThreshold(0.5);
-    msac.setMaxIterations(100);
+    msac.setDistanceThreshold(model_thresh_);
+    msac.setMaxIterations(model_iterations_);
 
     Eigen::VectorXf coefficients;
     std::vector<int> inliers;
@@ -97,7 +105,7 @@ std::vector<int> pcl_detector::PclProcessor::findInliers(const Eigen::VectorXf& 
     pcl::SampleConsensusModelLine<pcl::PointXYZ>::Ptr new_model_l(new pcl::SampleConsensusModelLine<pcl::PointXYZ>(cloud));
 
     std::vector<int> inliers;
-    new_model_l->selectWithinDistance(coefficients, 0.5, inliers);
+    new_model_l->selectWithinDistance(coefficients, prev_line_thresh_, inliers);
 
     return inliers;
 }
@@ -107,7 +115,8 @@ std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, std::vector<int>> pcl_detector::
     pcl::SampleConsensusModelLine<pcl::PointXYZ>::Ptr new_model_l(new pcl::SampleConsensusModelLine<pcl::PointXYZ>(cloud));
 
     std::vector<int> inliers;
-    new_model_l->selectWithinDistance(coefficients, 0.5, inliers);
+    new_model_l->selectWithinDistance(coefficients, project_thresh_, inliers);
+    std::cout << "Inliers size: " << inliers.size() << std::endl;
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr projectedCloud(new pcl::PointCloud<pcl::PointXYZ>());
     new_model_l->projectPoints(inliers, coefficients, *projectedCloud, false);
@@ -156,8 +165,7 @@ std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detect
 {
     std::vector<std::vector<int>> wall_indices;
     std::vector<pcl::PointXYZ> wall_poses;
-    uint16_t wall_threshold = 50;
-    double wall_distance = 1.5;
+    // Minimum distance between points to be considered part of the same wall. 1.5m was optimal ish for Brattørkaia, became to cluttered for Pirbadet. 0.5 was better there
     int start_index = static_cast<int>(projectedCloud->points.at(0).z);
     std::vector<int> wall = {start_index};
     pcl::PointXYZ start_point = projectedCloud->points.at(0);
@@ -167,13 +175,13 @@ std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detect
         auto& point = projectedCloud->points[i];
         auto& prev_point = projectedCloud->points[i - 1];
         double distance = std::sqrt(std::pow(point.x - prev_point.x, 2) + std::pow(point.y - prev_point.y, 2));
-        if (distance < wall_distance)
+        if (distance < wall_min_dist_)
         {
             wall.push_back(static_cast<int>(projectedCloud->points.at(i).z));
         }
         else
         {
-            if (wall.size() > wall_threshold)
+            if (wall.size() > u_int16_t(wall_min_points_))
             {
                 wall_indices.push_back(wall);
                 wall_poses.push_back(start_point);
@@ -184,7 +192,7 @@ std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detect
             start_point = point;
         }
     }
-    if(wall.size() > wall_threshold)
+    if(wall.size() > u_int16_t(wall_min_points_))
     {
         wall_indices.push_back(wall);
         wall_poses.push_back(start_point);
@@ -213,23 +221,69 @@ void pcl_detector::PclProcessor::extractWalls(pcl::PointCloud<pcl::PointXYZ>::Pt
     extract.filter(*cloud);
 }
 
-pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const Eigen::Vector3f& P1, const Eigen::Vector3f& P2)
+// pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const Eigen::Vector3f& P1, const Eigen::Vector3f& P2)
+// {
+//     Eigen::Vector2f P1_2D(P1[0], P1[1]), P2_2D(P2[0], P2[1]);
+
+//     pcl::PointIndices::Ptr indices_to_remove(new pcl::PointIndices());
+
+//     for (size_t i = 0; i < cloud->points.size(); ++i) {
+//         const auto& point = cloud->points[i];
+//         Eigen::Vector2f Q(point.x, point.y);
+
+//         // If the point meets the criteria for removal, add its index
+//         if (GeometryProcessor::isPointBehindWall(P1_2D, P2_2D, Q)) {
+//             indices_to_remove->indices.push_back(i);
+//         }
+//     }
+//     return indices_to_remove;
+// }
+pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const pcl::PointXYZ& P1, const pcl::PointXYZ& P2) 
 {
-    Eigen::Vector2f P1_2D(P1[0], P1[1]), P2_2D(P2[0], P2[1]);
+
+    // Calculate the magnitude of the vector from origin to point
+    float length = 200.0;
+    // Normalize the vector, then scale it to the new length
+    
+    pcl::PointXYZ P1_ext;
+    pcl::PointXYZ P2_ext;
+    float P1_magnitude = sqrt(P1.x * P1.x + P1.y * P1.y + P1.z * P1.z);
+    float P2_magnitude = sqrt(P2.x * P2.x + P2.y * P2.y + P2.z * P2.z);
+    P1_ext.x = (P1.x / P1_magnitude) * length;
+    P1_ext.y = (P1.y / P1_magnitude) * length;
+    P2_ext.x = (P2.x / P2_magnitude) * length;
+    P2_ext.y = (P2.y / P2_magnitude) * length;
+
+    // Calculate extended points from P1 and P2 out to a distance of 100 units
+
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr polygon_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+    polygon_cloud->points.push_back(P1);
+    polygon_cloud->points.push_back(P2);
+    polygon_cloud->points.push_back(P2_ext);
+    polygon_cloud->points.push_back(P1_ext);
+   
+
+    float max_x = std::numeric_limits<float>::lowest(); // Start with the lowest possible value
+    pcl::PointXYZ max_x_point;
 
     pcl::PointIndices::Ptr indices_to_remove(new pcl::PointIndices());
-
     for (size_t i = 0; i < cloud->points.size(); ++i) {
         const auto& point = cloud->points[i];
-        Eigen::Vector2f Q(point.x, point.y);
-
-        // If the point meets the criteria for removal, add its index
-        if (GeometryProcessor::isPointBehindWall(P1_2D, P2_2D, Q)) {
+         if (point.x > max_x) {
+            max_x = point.x;
+            max_x_point = point;
+        }
+        
+        // Now isXYPointIn2DXYPolygon expects pcl::PointXYZ point and pcl::PointCloud<pcl::PointXYZ>
+        if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(point, *polygon_cloud)) {
             indices_to_remove->indices.push_back(i);
         }
     }
+     
     return indices_to_remove;
 }
+
 
 void pcl_detector::PclProcessor::extractPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointIndices::Ptr indices_to_remove)
 {

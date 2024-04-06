@@ -1,16 +1,11 @@
 #include <pcl_detector/geometry_processor.hpp>
 namespace pcl_detector {
 
-std::vector<Eigen::VectorXf> GeometryProcessor::transformLines(const std::vector<Eigen::VectorXf>& prev_lines,
-                                                             const Eigen::Vector3f& translation,
-                                                             const Eigen::Quaternionf& rotation) 
-{
-    std::vector<Eigen::VectorXf> transformed_lines;
-
-    for (const auto& line : prev_lines) {
-        Eigen::VectorXf transformed_line(6); // Ensure your line is sized appropriately.
-
-        // Extract the point and direction vector from the line
+void GeometryProcessor::transformLines(std::vector<Eigen::VectorXf>& prev_lines,
+                                       const Eigen::Vector3f& translation,
+                                       const Eigen::Quaternionf& rotation) {
+    for (auto& line : prev_lines) { 
+        // Assuming line is already of size 6
         Eigen::Vector3f point(line[0], line[1], line[2]);
         Eigen::Vector3f direction(line[3], line[4], line[5]);
 
@@ -21,15 +16,15 @@ std::vector<Eigen::VectorXf> GeometryProcessor::transformLines(const std::vector
         // Apply the translation to the point
         Eigen::Vector3f translated_point = rotated_point + translation;
 
-        // Reassemble the transformed line
-        transformed_line << translated_point[0], translated_point[1], translated_point[2],
-                            rotated_direction[0], rotated_direction[1], rotated_direction[2];
-
-        transformed_lines.push_back(transformed_line);
+        line[0] = translated_point[0];
+        line[1] = translated_point[1];
+        line[2] = translated_point[2];
+        line[3] = rotated_direction[0];
+        line[4] = rotated_direction[1];
+        line[5] = rotated_direction[2];
     }
-
-    return transformed_lines;
 }
+
 
 float GeometryProcessor::distanceFromOriginToLine(const Eigen::VectorXf& line) 
 {
@@ -79,5 +74,7 @@ bool GeometryProcessor::isPointBehindWall(const Eigen::Vector2f& P1, const Eigen
 
     return dist_to_Q < dist_to_O;
 }
+
+
 
 }; // namespace pcl_detector
