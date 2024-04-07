@@ -28,7 +28,7 @@ public:
     void sortProjectedPoints(const std::vector<int>& inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& projection);
     std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> findWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& projection);
     void extractWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, std::vector<std::vector<int>>);
-    pcl::PointIndices::Ptr getPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const pcl::PointXYZ& wall_start, const pcl::PointXYZ& wall_end);
+    pcl::PointIndices::Ptr getPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointXYZ& wall_start, pcl::PointXYZ& wall_end);
     void extractPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointIndices::Ptr indices_to_remove);
 
 private:

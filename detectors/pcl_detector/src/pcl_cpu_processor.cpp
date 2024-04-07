@@ -238,7 +238,7 @@ void pcl_detector::PclProcessor::extractWalls(pcl::PointCloud<pcl::PointXYZ>::Pt
 //     }
 //     return indices_to_remove;
 // }
-pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const pcl::PointXYZ& P1, const pcl::PointXYZ& P2) 
+pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud,pcl::PointXYZ& P1,pcl::PointXYZ& P2) 
 {
 
     // Calculate the magnitude of the vector from origin to point
@@ -247,12 +247,16 @@ pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWall(pcl::Poin
     
     pcl::PointXYZ P1_ext;
     pcl::PointXYZ P2_ext;
+    P1.z = 1.0;
+    P2.z = 1.0;
     float P1_magnitude = sqrt(P1.x * P1.x + P1.y * P1.y + P1.z * P1.z);
     float P2_magnitude = sqrt(P2.x * P2.x + P2.y * P2.y + P2.z * P2.z);
     P1_ext.x = (P1.x / P1_magnitude) * length;
     P1_ext.y = (P1.y / P1_magnitude) * length;
     P2_ext.x = (P2.x / P2_magnitude) * length;
     P2_ext.y = (P2.y / P2_magnitude) * length;
+    P1_ext.z = P1.z;
+    P2_ext.z = P2.z;
 
     // Calculate extended points from P1 and P2 out to a distance of 100 units
 
@@ -264,17 +268,9 @@ pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWall(pcl::Poin
     polygon_cloud->points.push_back(P1_ext);
    
 
-    float max_x = std::numeric_limits<float>::lowest(); // Start with the lowest possible value
-    pcl::PointXYZ max_x_point;
-
     pcl::PointIndices::Ptr indices_to_remove(new pcl::PointIndices());
     for (size_t i = 0; i < cloud->points.size(); ++i) {
         const auto& point = cloud->points[i];
-         if (point.x > max_x) {
-            max_x = point.x;
-            max_x_point = point;
-        }
-        
         // Now isXYPointIn2DXYPolygon expects pcl::PointXYZ point and pcl::PointCloud<pcl::PointXYZ>
         if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(point, *polygon_cloud)) {
             indices_to_remove->indices.push_back(i);

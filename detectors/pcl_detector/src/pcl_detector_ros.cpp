@@ -258,11 +258,12 @@ void PclDetectorNode::processLine(const Eigen::VectorXf& line, const std::vector
         auto& wall_start = wall_poses[i];
         auto& wall_end = wall_poses[i + 1];
 
-        Eigen::Vector3f P1(wall_start.x, wall_start.y, 0); // Starting point of the wall segment
-        Eigen::Vector3f P2(wall_end.x, wall_end.y, 0);     // Ending point of the wall segment
+        // Eigen::Vector3f P1(wall_start.x, wall_start.y, 0); // Starting point of the wall segment
+        // Eigen::Vector3f P2(wall_end.x, wall_end.y, 0);     // Ending point of the wall segment
 
         // Add indices to the set instead of directly extracting them
         auto temp_indices = processor_->getPointsBehindWall(cloud, wall_start, wall_end);
+
         indices_to_remove_set.insert(temp_indices->indices.begin(), temp_indices->indices.end());
     }
 
@@ -492,6 +493,17 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
         
         detector_ = initialize_detector(detector);
         parameters_changed_ = false;
+
+        float voxel_leaf_size = this->get_parameter("processor.voxel_leaf_size").as_double();
+        float model_thresh = this->get_parameter("processor.model_thresh").as_double();
+        int model_iterations = this->get_parameter("processor.model_iterations").as_int();
+        float prev_line_thresh = this->get_parameter("processor.prev_line_thresh").as_double();
+        float project_thresh = this->get_parameter("processor.project_thresh").as_double();
+        float wall_min_dist = this->get_parameter("processor.wall_min_dist").as_double();
+        int wall_min_points = this->get_parameter("processor.wall_min_points").as_int();
+
+        processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, prev_line_thresh, project_thresh, wall_min_dist, wall_min_points);
+
     }
     
     wall_poses_.header = cloud_msg->header;
@@ -501,9 +513,9 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     pcl::fromROSMsg(*cloud_msg, *cartesian_cloud);
     RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Received PointCloud with " << cartesian_cloud->size() << " points");
     
-    // processor_.applyPassThrough(cartesian_cloud, "z", -2.0, 5.0);
-    // processor_.applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
-    // processor_.applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
+    processor_->applyPassThrough(cartesian_cloud, "z", -2.0, 5.0);
+    processor_->applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
+    processor_->applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
 
     // set height to 1? Might affect the clustering
     processor_->flattenPointCloud(*cartesian_cloud, 0.0);
@@ -551,25 +563,25 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Filtered PointCloud to " << cartesian_cloud->size() << " points");
 
     // Finds clusters with the configured detector
-    // pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cartesian_cloud);
+    pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cartesian_cloud);
 
     // if (detections.size() == 0) {
     //     RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
     // }
 
     // Converts the clusters-PointCloud to an appropriate msg for publishing
-    sensor_msgs::msg::PointCloud2 downsampled_cloud_msg;
-    pcl::toROSMsg(*cartesian_cloud, downsampled_cloud_msg);
-    downsampled_cloud_msg.header = cloud_msg->header;
+    // sensor_msgs::msg::PointCloud2 downsampled_cloud_msg;
+    // pcl::toROSMsg(*cartesian_cloud, downsampled_cloud_msg);
+    // downsampled_cloud_msg.header = cloud_msg->header;
 
-    publisher_->publish(downsampled_cloud_msg);
+    // publisher_->publish(downsampled_cloud_msg);
 
     // Converts the clusters-PointCloud to an appropriate msg for publishing
-    // sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
-    // pcl::toROSMsg(detections, centroids_cloud_msg);
-    // centroids_cloud_msg.header = cloud_msg->header;
+    sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
+    pcl::toROSMsg(detections, centroids_cloud_msg);
+    centroids_cloud_msg.header = cloud_msg->header;
 
-    // publisher_->publish(centroids_cloud_msg);
+    publisher_->publish(centroids_cloud_msg);
 }
 
 } // namespace pcl_detector

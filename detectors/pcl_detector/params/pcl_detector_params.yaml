@@ -6,7 +6,7 @@ pcl_detector_node:
       model_iterations: 10
       prev_line_thresh: 0.5
       project_thresh: 0.5
-      wall_min_dist: 0.5
+      wall_min_dist: 1.0
       wall_min_points: 50
     
     transform_lines: true
