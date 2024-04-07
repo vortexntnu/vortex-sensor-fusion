@@ -186,12 +186,15 @@ std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detect
                 wall_indices.push_back(wall);
                 wall_poses.push_back(start_point);
                 wall_poses.push_back(prev_point);
+                std::cout << "Wall size: " << wall.size() << std::endl;
             }
+            std::cout << "Wall size: " << wall.size() << std::endl;
             wall.clear();
             wall.push_back(static_cast<int>(projectedCloud->points.at(i).z));
             start_point = point;
         }
     }
+    std::cout << "Wall size end of line: " << wall.size() << std::endl;
     if(wall.size() > u_int16_t(wall_min_points_))
     {
         wall_indices.push_back(wall);

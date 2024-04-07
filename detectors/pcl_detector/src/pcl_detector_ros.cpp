@@ -527,7 +527,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
       transformLines(cloud_msg, prev_lines_);
       publishtfLineMarkerArray(prev_lines_, cloud_msg->header.frame_id);
     }
-
+    RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "number of prev lines: " << prev_lines_.size());
     // Sort the lines by proximity to the origin so we remove closest walls first
     GeometryProcessor::sortLinesByProximityToOrigin(prev_lines_);
 
@@ -539,7 +539,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
         auto inliers = processor_->findInliers(line, cartesian_cloud);
         // processLine(line, inliers, cartesian_cloud);
         if(inliers.size() > u_int16_t(min_inliers)){
-        processLine(line, inliers, cartesian_cloud);
+            processLine(line, inliers, cartesian_cloud);
         }
     }
 
@@ -563,25 +563,25 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Filtered PointCloud to " << cartesian_cloud->size() << " points");
 
     // Finds clusters with the configured detector
-    pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cartesian_cloud);
+    // pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cartesian_cloud);
 
     // if (detections.size() == 0) {
     //     RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
     // }
 
     // Converts the clusters-PointCloud to an appropriate msg for publishing
-    // sensor_msgs::msg::PointCloud2 downsampled_cloud_msg;
-    // pcl::toROSMsg(*cartesian_cloud, downsampled_cloud_msg);
-    // downsampled_cloud_msg.header = cloud_msg->header;
+    sensor_msgs::msg::PointCloud2 downsampled_cloud_msg;
+    pcl::toROSMsg(*cartesian_cloud, downsampled_cloud_msg);
+    downsampled_cloud_msg.header = cloud_msg->header;
 
-    // publisher_->publish(downsampled_cloud_msg);
+    publisher_->publish(downsampled_cloud_msg);
 
     // Converts the clusters-PointCloud to an appropriate msg for publishing
-    sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
-    pcl::toROSMsg(detections, centroids_cloud_msg);
-    centroids_cloud_msg.header = cloud_msg->header;
+    // sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
+    // pcl::toROSMsg(detections, centroids_cloud_msg);
+    // centroids_cloud_msg.header = cloud_msg->header;
 
-    publisher_->publish(centroids_cloud_msg);
+    // publisher_->publish(centroids_cloud_msg);
 }
 
 } // namespace pcl_detector
