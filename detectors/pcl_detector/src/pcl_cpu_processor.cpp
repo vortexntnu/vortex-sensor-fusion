@@ -116,7 +116,7 @@ std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, std::vector<int>> pcl_detector::
 
     std::vector<int> inliers;
     new_model_l->selectWithinDistance(coefficients, project_thresh_, inliers);
-    std::cout << "Inliers size: " << inliers.size() << std::endl;
+    std::cout << "Inliers size after optimization: " << inliers.size() << std::endl;
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr projectedCloud(new pcl::PointCloud<pcl::PointXYZ>());
     new_model_l->projectPoints(inliers, coefficients, *projectedCloud, false);
@@ -170,7 +170,7 @@ std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detect
     std::vector<int> wall = {start_index};
     pcl::PointXYZ start_point = projectedCloud->points.at(0);
 
-    for (uint16_t i = 1; i < projectedCloud->points.size()-1; i++)
+    for (uint16_t i = 1; i < projectedCloud->points.size(); i++)
     {
         auto& point = projectedCloud->points[i];
         auto& prev_point = projectedCloud->points[i - 1];
@@ -186,9 +186,11 @@ std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detect
                 wall_indices.push_back(wall);
                 wall_poses.push_back(start_point);
                 wall_poses.push_back(prev_point);
-                std::cout << "Wall size: " << wall.size() << std::endl;
+                std::cout << "Size of found wall: " << wall.size() << std::endl;
             }
-            std::cout << "Wall size: " << wall.size() << std::endl;
+            else {
+                std::cout << "Size of found wall not big enough: " << wall.size() << std::endl;
+            }
             wall.clear();
             wall.push_back(static_cast<int>(projectedCloud->points.at(i).z));
             start_point = point;

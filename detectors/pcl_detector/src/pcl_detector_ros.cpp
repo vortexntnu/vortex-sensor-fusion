@@ -523,7 +523,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     processor_->applyVoxelGrid(cartesian_cloud);
 
     bool transform_lines = this->get_parameter("transform_lines").as_bool();
-    if (!transform_lines) {
+    if (transform_lines) {
       transformLines(cloud_msg, prev_lines_);
       publishtfLineMarkerArray(prev_lines_, cloud_msg->header.frame_id);
     }
@@ -538,6 +538,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     for (const auto& line : prev_lines_) {
         auto inliers = processor_->findInliers(line, cartesian_cloud);
         // processLine(line, inliers, cartesian_cloud);
+        RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of prev line: " << inliers.size());
         if(inliers.size() > u_int16_t(min_inliers)){
             processLine(line, inliers, cartesian_cloud);
         }
@@ -547,6 +548,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     int new_lines = this->get_parameter("new_lines").as_int();
     for (int i = 0; i < new_lines; i++) {
         auto [coefficients, inliers] = processor_->findLineWithMSAC(cartesian_cloud);
+        RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of new line: " << inliers.size());
         processLine(coefficients, inliers, cartesian_cloud);
     }
 

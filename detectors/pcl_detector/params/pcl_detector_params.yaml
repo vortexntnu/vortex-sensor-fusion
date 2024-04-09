@@ -2,17 +2,17 @@ pcl_detector_node:
   ros__parameters:
     processor:
       voxel_leaf_size: 0.1
-      model_thresh: 0.5
-      model_iterations: 10
-      prev_line_thresh: 0.5
-      project_thresh: 0.5
-      wall_min_dist: 1.0
-      wall_min_points: 50
+      model_thresh: 0.5   # Threshold for RANSAC model
+      model_iterations: 100 # Number of iterations for RANSAC
+      prev_line_thresh: 1.0 # Threshold to count inliers for prev lines
+      project_thresh: 0.75 # Threshold for point to remove close to walls
+      wall_min_dist: 1.0  # Minimum distance between points on line to extend wall
+      wall_min_points: 35  # Minimum number of points to consider a wall
     
-    transform_lines: true
+    transform_lines: false
     transform_timeout_nsec: 50000000
     prev_line_min_inliers: 50
-    new_lines: 1
+    new_lines: 1  # Number of new lines to find for new callback
     
 
     detector: "dbscan" # one of "dbscan", "euclidean"
