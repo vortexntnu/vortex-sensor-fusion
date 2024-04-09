@@ -17,11 +17,11 @@
 namespace pcl_detector {
 
 PclProcessor::PclProcessor(float voxel_leaf_size, float model_thresh, int model_iterations,
-                 float prev_line_thresh, float project_thresh, float wall_min_dist, int wall_min_points)
+                 float prev_line_thresh, float project_thresh, float wall_min_dist, int wall_min_points, float wall_merge_dist)
     : voxel_leaf_size_(voxel_leaf_size), model_thresh_(model_thresh),
       model_iterations_(model_iterations), prev_line_thresh_(prev_line_thresh),
       project_thresh_(project_thresh), wall_min_dist_(wall_min_dist),
-      wall_min_points_(wall_min_points) {}
+      wall_min_points_(wall_min_points), wall_merge_dist_(wall_merge_dist) {}
 
 std::vector<int> PclProcessor::removeNanPoints(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
@@ -161,50 +161,107 @@ void pcl_detector::PclProcessor::sortProjectedPoints(const std::vector<int>& inl
 
 }
 
-std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detector::PclProcessor::findWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& projectedCloud)
-{
-    std::vector<std::vector<int>> wall_indices;
-    std::vector<pcl::PointXYZ> wall_poses;
-    // Minimum distance between points to be considered part of the same wall. 1.5m was optimal ish for Brattørkaia, became to cluttered for Pirbadet. 0.5 was better there
-    int start_index = static_cast<int>(projectedCloud->points.at(0).z);
-    std::vector<int> wall = {start_index};
-    pcl::PointXYZ start_point = projectedCloud->points.at(0);
+// std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detector::PclProcessor::findWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& projectedCloud)
+// {
+//     std::vector<std::vector<int>> wall_indices;
+//     std::vector<pcl::PointXYZ> wall_poses;
+//     int start_index = static_cast<int>(projectedCloud->points.at(0).z);
+//     std::vector<int> wall = {start_index};
+//     pcl::PointXYZ start_point = projectedCloud->points.at(0);
 
-    for (uint16_t i = 1; i < projectedCloud->points.size(); i++)
-    {
-        auto& point = projectedCloud->points[i];
-        auto& prev_point = projectedCloud->points[i - 1];
-        double distance = std::sqrt(std::pow(point.x - prev_point.x, 2) + std::pow(point.y - prev_point.y, 2));
-        if (distance < wall_min_dist_)
-        {
-            wall.push_back(static_cast<int>(projectedCloud->points.at(i).z));
+//     for (uint16_t i = 1; i < projectedCloud->points.size(); i++)
+//     {
+//         auto& point = projectedCloud->points[i];
+//         auto& prev_point = projectedCloud->points[i - 1];
+//         double distance = std::sqrt(std::pow(point.x - prev_point.x, 2) + std::pow(point.y - prev_point.y, 2));
+//         if (distance < wall_min_dist_)
+//         {
+//             wall.push_back(static_cast<int>(projectedCloud->points.at(i).z));
+//         }
+//         else
+//         {
+//             if (wall.size() > u_int16_t(wall_min_points_))
+//             {
+//                 wall_indices.push_back(wall);
+//                 wall_poses.push_back(start_point);
+//                 wall_poses.push_back(prev_point);
+//                 std::cout << "Size of found wall: " << wall.size() << std::endl;
+//             }
+//             else {
+//                 std::cout << "Size of found wall not big enough: " << wall.size() << std::endl;
+//             }
+//             wall.clear();
+//             wall.push_back(static_cast<int>(projectedCloud->points.at(i).z));
+//             start_point = point;
+//         }
+//     }
+//     std::cout << "Wall size end of line: " << wall.size() << std::endl;
+//     if(wall.size() > u_int16_t(wall_min_points_))
+//     {
+//         wall_indices.push_back(wall);
+//         wall_poses.push_back(start_point);
+//         wall_poses.push_back(projectedCloud->points.back());
+//     }
+//     return {wall_indices, wall_poses};
+// }
+
+std::tuple<std::vector<std::vector<int>>, std::vector<pcl::PointXYZ>> pcl_detector::PclProcessor::findWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& projectedCloud) {
+        std::vector<std::vector<int>> wall_indices;
+        std::vector<pcl::PointXYZ> wall_poses; // Pair of start and end points for each wall
+
+        int start_index = static_cast<int>(projectedCloud->points.front().z);
+        std::vector<int> current_wall_indices = {start_index};
+        pcl::PointXYZ start_point = projectedCloud->points.front(), end_point;
+
+        for (size_t i = 1; i < projectedCloud->points.size(); ++i) {
+            const auto& point = projectedCloud->points[i];
+            const auto& prev_point = projectedCloud->points[i - 1];
+            double distance = std::hypot(point.x - prev_point.x, point.y - prev_point.y);
+
+            if (distance < wall_min_dist_) {
+                current_wall_indices.push_back(static_cast<int>(projectedCloud->points.at(i).z));
+                end_point = point; // Update end point of current wall
+                continue;
+            } else {
+
+                if (current_wall_indices.size() > u_int16_t(wall_min_points_)) {
+                    // Attempt to merge with the previous wall if close enough
+                    if (!wall_indices.empty() && 
+                        std::hypot(start_point.x - wall_poses.back().x, start_point.y - wall_poses.back().y) < wall_merge_dist_) {
+                        // Merge current wall with previous wall
+                        wall_indices.back().insert(wall_indices.back().end(), current_wall_indices.begin(), current_wall_indices.end());
+                        wall_poses.back() = end_point; // Update end point of merged wall
+                    } else {
+                        // Add as a new wall
+                        wall_indices.push_back(current_wall_indices);
+                        wall_poses.push_back(start_point);
+                        wall_poses.push_back(end_point);
+                    }
+                }
+                // Reset for next wall
+                current_wall_indices.clear();
+                current_wall_indices.push_back(i);
+                start_point = point;
+                end_point = point; // Reset end point for the new wall
+            }
         }
-        else
-        {
-            if (wall.size() > u_int16_t(wall_min_points_))
-            {
-                wall_indices.push_back(wall);
+
+        // Check if the last wall meets criteria and isn't merged
+        if (current_wall_indices.size() > u_int16_t(wall_min_points_)) {
+            if (!wall_indices.empty() && 
+                std::hypot(start_point.x - wall_poses.back().x, start_point.y - wall_poses.back().y) < wall_merge_dist_) {
+                // Merge with previous wall
+                wall_indices.back().insert(wall_indices.back().end(), current_wall_indices.begin(), current_wall_indices.end());
+                wall_poses.back() = end_point;
+            } else {
+                wall_indices.push_back(current_wall_indices);
                 wall_poses.push_back(start_point);
-                wall_poses.push_back(prev_point);
-                std::cout << "Size of found wall: " << wall.size() << std::endl;
+                wall_poses.push_back(end_point);
             }
-            else {
-                std::cout << "Size of found wall not big enough: " << wall.size() << std::endl;
-            }
-            wall.clear();
-            wall.push_back(static_cast<int>(projectedCloud->points.at(i).z));
-            start_point = point;
         }
+
+        return {wall_indices, wall_poses};
     }
-    std::cout << "Wall size end of line: " << wall.size() << std::endl;
-    if(wall.size() > u_int16_t(wall_min_points_))
-    {
-        wall_indices.push_back(wall);
-        wall_poses.push_back(start_point);
-        wall_poses.push_back(projectedCloud->points.back());
-    }
-    return {wall_indices, wall_poses};
-}
 
 void pcl_detector::PclProcessor::extractWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const std::vector<std::vector<int>> wall_indices)
 {
@@ -277,13 +334,53 @@ pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWall(pcl::Poin
     for (size_t i = 0; i < cloud->points.size(); ++i) {
         const auto& point = cloud->points[i];
         // Now isXYPointIn2DXYPolygon expects pcl::PointXYZ point and pcl::PointCloud<pcl::PointXYZ>
-        if (pcl::isXYPointIn2DXYPolygon<pcl::PointXYZ>(point, *polygon_cloud)) {
+        if (isXYPointIn2DXYPolygon(point, *polygon_cloud)) {
             indices_to_remove->indices.push_back(i);
         }
     }
      
     return indices_to_remove;
 }
+
+bool pcl_detector::PclProcessor::isXYPointIn2DXYPolygon (const pcl::PointXYZ& point, const pcl::PointCloud<pcl::PointXYZ> &polygon)
+{
+  bool in_poly = false;
+  double x1, x2, y1, y2;
+
+  const auto nr_poly_points = polygon.size ();
+  // start with the last point to make the check last point<->first point the first one
+  double xold = polygon[nr_poly_points - 1].x;
+  double yold = polygon[nr_poly_points - 1].y;
+  for (std::size_t i = 0; i < nr_poly_points; i++)
+  {
+    double xnew = polygon[i].x;
+    double ynew = polygon[i].y;
+    if (xnew > xold)
+    {
+      x1 = xold;
+      x2 = xnew;
+      y1 = yold;
+      y2 = ynew;
+    }
+    else
+    {
+      x1 = xnew;
+      x2 = xold;
+      y1 = ynew;
+      y2 = yold;
+    }
+
+    if ( (xnew < point.x) == (point.x <= xold) && (point.y - y1) * (x2 - x1) < (y2 - y1) * (point.x - x1) )
+    {
+      in_poly = !in_poly;
+    }
+    xold = xnew;
+    yold = ynew;
+  }
+
+  return (in_poly);
+}
+
 
 
 void pcl_detector::PclProcessor::extractPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointIndices::Ptr indices_to_remove)

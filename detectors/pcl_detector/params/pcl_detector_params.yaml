@@ -8,6 +8,7 @@ pcl_detector_node:
       project_thresh: 0.75 # Threshold for point to remove close to walls
       wall_min_dist: 1.0  # Minimum distance between points on line to extend wall
       wall_min_points: 35  # Minimum number of points to consider a wall
+      wall_merge_dist: 10.0 # Maximum distance between walls on same line to merge
     
     transform_lines: false
     transform_timeout_nsec: 50000000

@@ -13,7 +13,7 @@ public:
     
 
     PclProcessor(float voxel_leaf_size, float model_thresh, int model_iterations,
-                 float prev_line_thresh, float project_thresh, float wall_min_dist, int wall_min_points);
+                 float prev_line_thresh, float project_thresh, float wall_min_dist, int wall_min_points, float wall_merge_dist);
 
     std::vector<int> removeNanPoints(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
     void flattenPointCloud(pcl::PointCloud<pcl::PointXYZ>& cloud, float new_z_value);
@@ -30,6 +30,8 @@ public:
     void extractWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, std::vector<std::vector<int>>);
     pcl::PointIndices::Ptr getPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointXYZ& wall_start, pcl::PointXYZ& wall_end);
     void extractPointsBehindWall(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointIndices::Ptr indices_to_remove);
+    bool isXYPointIn2DXYPolygon (const pcl::PointXYZ& point, const pcl::PointCloud<pcl::PointXYZ> &polygon);
+
 
 private:
     float voxel_leaf_size_;
@@ -39,6 +41,7 @@ private:
     float project_thresh_;
     float wall_min_dist_;
     int wall_min_points_;
+    float wall_merge_dist_;
 
     // std::vector<pcl::PointIndices> findLineClusters(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, float cluster_tolerance, int min_cluster_size, int max_cluster_size);
 

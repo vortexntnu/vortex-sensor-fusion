@@ -30,6 +30,7 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   declare_parameter<float>("processor.project_thresh", 0.5);
   declare_parameter<float>("processor.wall_min_dist", 0.5);
   declare_parameter<int>("processor.wall_min_points", 50);
+  declare_parameter<float>("processor.wall_merge_dist", 10.0);
 
   declare_parameter<bool>("transform_lines", true);
   declare_parameter<int>("transform_timeout_nsec", 50000000);
@@ -73,9 +74,10 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   float project_thresh = this->get_parameter("processor.project_thresh").as_double();
   float wall_min_dist = this->get_parameter("processor.wall_min_dist").as_double();
   int wall_min_points = this->get_parameter("processor.wall_min_points").as_int();
+  float wall_merge_dist = this->get_parameter("processor.wall_merge_dist").as_double();
 
 
-  processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, prev_line_thresh, project_thresh, wall_min_dist, wall_min_points);
+  processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, prev_line_thresh, project_thresh, wall_min_dist, wall_min_points, wall_merge_dist);
 
   // Initialize transform listener
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -413,7 +415,7 @@ void PclDetectorNode::publishExtendedLinesFromOrigin(const geometry_msgs::msg::P
     }
 
     // Publish the MarkerArray
-    wall_publisher->publish(marker_array);
+    wall_cone_publisher->publish(marker_array);
 }
 
 geometry_msgs::msg::Point PclDetectorNode::ExtendLineFromOriginToLength(const geometry_msgs::msg::Point& point, double length) {
@@ -479,7 +481,7 @@ void PclDetectorNode::publishWallMarkerArray(const geometry_msgs::msg::PoseArray
     }
 
     // Publish the MarkerArray
-    wall_cone_publisher->publish(marker_array);
+    wall_publisher->publish(marker_array);
 }
 
 
@@ -501,8 +503,9 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
         float project_thresh = this->get_parameter("processor.project_thresh").as_double();
         float wall_min_dist = this->get_parameter("processor.wall_min_dist").as_double();
         int wall_min_points = this->get_parameter("processor.wall_min_points").as_int();
+        float wall_merge_dist = this->get_parameter("processor.wall_merge_dist").as_double();
 
-        processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, prev_line_thresh, project_thresh, wall_min_dist, wall_min_points);
+        processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, prev_line_thresh, project_thresh, wall_min_dist, wall_min_points, wall_merge_dist);
 
     }
     
