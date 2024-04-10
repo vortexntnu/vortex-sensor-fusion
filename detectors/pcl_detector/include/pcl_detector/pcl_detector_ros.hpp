@@ -30,6 +30,11 @@
 #include <tf2_ros/buffer.h>
 
 
+    struct LineData {
+    Eigen::VectorXf coefficients;
+    std::vector<pcl::PointXYZ> wall_poses;
+    std::vector<bool> wallsActive;
+    };
 
 enum class DetectorType {
     Euclidean,
@@ -91,6 +96,8 @@ class PclDetectorNode : public rclcpp::Node
     geometry_msgs::msg::Point ExtendLineFromOriginToLength(const geometry_msgs::msg::Point& point, double length);
     void publishExtendedLinesFromOrigin(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
 
+    void filterLines(std::vector<LineData>& linesData);
+
 
 
 
@@ -126,6 +133,7 @@ class PclDetectorNode : public rclcpp::Node
     std::vector<Eigen::VectorXf> current_lines_;
     std::vector<Eigen::VectorXf> prev_lines_;
     geometry_msgs::msg::PoseArray wall_poses_;
+
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },

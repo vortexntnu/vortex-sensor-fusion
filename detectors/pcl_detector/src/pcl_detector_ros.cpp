@@ -4,6 +4,10 @@
 #include <pcl_detector/geometry_processor.hpp>
 #include <visualization_msgs/msg/marker.hpp>
 
+#include <vector>
+#include <Eigen/Dense>
+#include <algorithm>
+
 using std::placeholders::_1;
 
 namespace pcl_detector {
@@ -244,44 +248,44 @@ std::tuple<Eigen::Vector3f, Eigen::Quaternionf> PclDetectorNode::calculateTransf
     }
 }
 
-void PclDetectorNode::processLine(const Eigen::VectorXf& line, const std::vector<int> inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
-{
-    auto [optimized_coefficients, wall_indices, wall_poses] = processor_->handleLine(line, inliers, cloud);
-    geometry_msgs::msg::PoseArray ros_wall_poses = getWallPoses(wall_poses);
-    wall_poses_.poses.insert(wall_poses_.poses.end(), ros_wall_poses.poses.begin(), ros_wall_poses.poses.end());
-    processor_->extractWalls(cloud, wall_indices);
-    
-    // Use a set to accumulate unique indices to remove
-    std::set<int> indices_to_remove_set;
+// void PclDetectorNode::processLine(const Eigen::VectorXf& line, const std::vector<int> inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+// {
+//     auto [optimized_coefficients, wall_indices, wall_poses] = processor_->handleLine(line, inliers, cloud);
+//     geometry_msgs::msg::PoseArray ros_wall_poses = getWallPoses(wall_poses);
+//     wall_poses_.poses.insert(wall_poses_.poses.end(), ros_wall_poses.poses.begin(), ros_wall_poses.poses.end());
+//     processor_->extractWalls(cloud, wall_indices);
+//     auto indices_to_remove = processor_->getPointsBehindWalls(cloud, wall_poses);
+//     // Use a set to accumulate unique indices to remove
+//     // std::set<int> indices_to_remove_set;
 
-    for (size_t i = 0; i < wall_poses.size(); i += 2) {
-        if (i + 1 >= wall_poses.size()) continue; // Safety check
+//     // for (size_t i = 0; i < wall_poses.size(); i += 2) {
+//     //     if (i + 1 >= wall_poses.size()) continue; // Safety check
 
-        auto& wall_start = wall_poses[i];
-        auto& wall_end = wall_poses[i + 1];
+//     //     auto& wall_start = wall_poses[i];
+//     //     auto& wall_end = wall_poses[i + 1];
 
-        // Eigen::Vector3f P1(wall_start.x, wall_start.y, 0); // Starting point of the wall segment
-        // Eigen::Vector3f P2(wall_end.x, wall_end.y, 0);     // Ending point of the wall segment
+//     //     // Eigen::Vector3f P1(wall_start.x, wall_start.y, 0); // Starting point of the wall segment
+//     //     // Eigen::Vector3f P2(wall_end.x, wall_end.y, 0);     // Ending point of the wall segment
 
-        // Add indices to the set instead of directly extracting them
-        auto temp_indices = processor_->getPointsBehindWall(cloud, wall_start, wall_end);
+//     //     // Add indices to the set instead of directly extracting them
+//     //     auto temp_indices = processor_->getPointsBehindWall(cloud, wall_start, wall_end);
 
-        indices_to_remove_set.insert(temp_indices->indices.begin(), temp_indices->indices.end());
-    }
+//     //     indices_to_remove_set.insert(temp_indices->indices.begin(), temp_indices->indices.end());
+//     // }
 
-    // Convert the set to PointIndices for extraction
-    pcl::PointIndices::Ptr indices_to_remove(new pcl::PointIndices);
-    indices_to_remove->indices.assign(indices_to_remove_set.begin(), indices_to_remove_set.end());
+//     // // Convert the set to PointIndices for extraction
+//     // pcl::PointIndices::Ptr indices_to_remove(new pcl::PointIndices);
+//     // indices_to_remove->indices.assign(indices_to_remove_set.begin(), indices_to_remove_set.end());
 
-    // Perform the extraction only once using the accumulated indices
-    if (!indices_to_remove->indices.empty()) {
-        processor_->extractPointsBehindWall(cloud, indices_to_remove);
-    }
+//     // Perform the extraction only once using the accumulated indices
+//     if (!indices_to_remove->indices.empty()) {
+//         processor_->extractPointsBehindWall(cloud, indices_to_remove);
+//     }
 
-    if (!wall_poses.empty()) {
-        current_lines_.push_back(optimized_coefficients);
-    }
-}
+//     if (!wall_poses.empty()) {
+//         current_lines_.push_back(optimized_coefficients);
+//     }
+// }
 
 void PclDetectorNode::publishLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id) {
     visualization_msgs::msg::MarkerArray marker_array;
@@ -374,9 +378,31 @@ void PclDetectorNode::publishExtendedLinesFromOrigin(const geometry_msgs::msg::P
         auto& start_pose = pose_array.poses[i];
         auto& end_pose = pose_array.poses[i + 1];
 
+        // Calculate the direction vector from start to end pose
+        geometry_msgs::msg::Point direction;
+        direction.x = end_pose.position.x - start_pose.position.x;
+        direction.y = end_pose.position.y - start_pose.position.y;
+        direction.z = end_pose.position.z - start_pose.position.z;
+
+        // Calculate adjustment for 5% towards each other
+        float adjustFraction = 0.05; // 5%
+        geometry_msgs::msg::Point adjusted_start_pose, adjusted_end_pose;
+        adjusted_start_pose.x = start_pose.position.x + direction.x * adjustFraction;
+        adjusted_start_pose.y = start_pose.position.y + direction.y * adjustFraction;
+        adjusted_start_pose.z = start_pose.position.z + direction.z * adjustFraction;
+
+        adjusted_end_pose.x = end_pose.position.x - direction.x * adjustFraction;
+        adjusted_end_pose.y = end_pose.position.y - direction.y * adjustFraction;
+        adjusted_end_pose.z = end_pose.position.z - direction.z * adjustFraction;
+
+        // Process adjusted start and end points to extend lines from origin
+        geometry_msgs::msg::Point extended_point_1 = ExtendLineFromOriginToLength(adjusted_start_pose, 100.0);
+        geometry_msgs::msg::Point extended_point_2 = ExtendLineFromOriginToLength(adjusted_end_pose, 100.0);
+        
+
         // Process start and end points to extend lines from origin
-        geometry_msgs::msg::Point extended_point_1 = ExtendLineFromOriginToLength(start_pose.position, 100.0);
-        geometry_msgs::msg::Point extended_point_2 = ExtendLineFromOriginToLength(end_pose.position, 100.0);
+        // geometry_msgs::msg::Point extended_point_1 = ExtendLineFromOriginToLength(start_pose.position, 100.0);
+        // geometry_msgs::msg::Point extended_point_2 = ExtendLineFromOriginToLength(end_pose.position, 100.0);
 
 
         // Store the extended points for further use
@@ -484,6 +510,91 @@ void PclDetectorNode::publishWallMarkerArray(const geometry_msgs::msg::PoseArray
     wall_publisher->publish(marker_array);
 }
 
+void PclDetectorNode::filterLines(std::vector<LineData>& linesData) {
+    // std::vector<Eigen::VectorXf> filtered_lines;
+
+
+
+    // Iterate over each line to create polygons and check other wall points
+    for (size_t i = 0; i < linesData.size(); ++i) {
+        auto& lineData = linesData[i];
+
+        for (size_t j = 0; j < lineData.wall_poses.size(); j += 2) {
+            auto p1 = lineData.wall_poses[j];
+            auto p2 = lineData.wall_poses[j + 1];
+
+            // Calculate the direction vector from p1 to p2
+            pcl::PointXYZ direction;
+            direction.x = p2.x - p1.x;
+            direction.y = p2.y - p1.y;
+
+            // Shorten the segment by 5% from each side
+            float adjustFraction = 0.05; // 5%
+            pcl::PointXYZ adjustedP1, adjustedP2;
+            adjustedP1.x = p1.x + direction.x * adjustFraction;
+            adjustedP1.y = p1.y + direction.y * adjustFraction;
+
+            adjustedP2.x = p2.x - direction.x * adjustFraction;
+            adjustedP2.y = p2.y - direction.y * adjustFraction;
+
+            auto polygon = processor_->createPolygon(adjustedP1, adjustedP2);
+            
+            // Check all other lines' wall points
+            for (size_t k = 0; k < linesData.size(); ++k) {
+                if (i == k) continue; // Skip the same line
+
+                auto& otherLine = linesData[k];
+                for (size_t m = 0; m < otherLine.wall_poses.size(); ++m) {
+                    const auto& otherPoint = otherLine.wall_poses[m];
+
+                    if (processor_->isXYPointIn2DXYPolygon(otherPoint, *polygon)) {
+                        // Mark the wall that the point belongs to as inactive
+                        otherLine.wallsActive[m / 2] = false;
+                    }
+                }
+            }
+        }
+
+
+        // // Add coefficients of lines with at least one active wall to filtered_lines
+        // if (std::any_of(lineData.wallsActive.begin(), lineData.wallsActive.end(), [](bool active){ return active; })) {
+        //     filtered_lines.push_back(lineData.coefficients);
+        // }
+
+        for (auto& lineData : linesData) {
+        std::vector<pcl::PointXYZ> activeWallPoses; // To store poses of active walls
+
+        // Process each wall in the current line
+        for (size_t j = 0; j < lineData.wall_poses.size(); j += 2) {
+            if (!lineData.wallsActive[j / 2]) continue; // Skip walls marked as inactive
+
+            // For active walls, add both start and end points to activeWallPoses
+            activeWallPoses.push_back(lineData.wall_poses[j]);
+            activeWallPoses.push_back(lineData.wall_poses[j + 1]);
+        }
+
+        // Update the line's wall poses with only the active walls
+        lineData.wall_poses = std::move(activeWallPoses);
+
+        // If there are active walls remaining, add the line's coefficients to filtered_lines
+        // if (!lineData.wall_poses.empty()) {
+        //     filtered_lines.push_back(lineData.coefficients);
+        // }
+    }
+
+    // Remove lines from linesData that have no walls left
+    linesData.erase(std::remove_if(linesData.begin(), linesData.end(), 
+                                   [](const LineData& ld) { return ld.wall_poses.empty(); }),
+                    linesData.end());
+
+    }
+
+    
+}
+
+
+
+
 
 // Callback function for processing incoming point cloud messages
 void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr cloud_msg)
@@ -514,7 +625,8 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     // Converts incoming ros-msg to a PointCloud 
     pcl::PointCloud<pcl::PointXYZ>::Ptr cartesian_cloud(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(*cloud_msg, *cartesian_cloud);
-    RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Received PointCloud with " << cartesian_cloud->size() << " points");
+    // RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Received PointCloud with " << cartesian_cloud->size() << " points");
+    RCLCPP_INFO(this->get_logger(), "Received PointCloud with %zu points", cartesian_cloud->size());
     
     processor_->applyPassThrough(cartesian_cloud, "z", -2.0, 5.0);
     processor_->applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
@@ -530,30 +642,84 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
       transformLines(cloud_msg, prev_lines_);
       publishtfLineMarkerArray(prev_lines_, cloud_msg->header.frame_id);
     }
-    RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "number of prev lines: " << prev_lines_.size());
+    // RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "number of prev lines: " << prev_lines_.size());
+    RCLCPP_INFO(this->get_logger(), "number of prev lines: %zu", prev_lines_.size());
     // Sort the lines by proximity to the origin so we remove closest walls first
-    GeometryProcessor::sortLinesByProximityToOrigin(prev_lines_);
+    // GeometryProcessor::sortLinesByProximityToOrigin(prev_lines_);
 
     //Some pcl functions can't hanlde NaN values, so we remove them
     std::vector<int> indices = processor_->removeNanPoints(cartesian_cloud);
     int min_inliers = this->get_parameter("prev_line_min_inliers").as_int();
 
+    std::vector<LineData> linesData;
+    std::vector<int> indices_to_remove;
+    // pcl::PointIndices::Ptr indices_to_remove(new pcl::PointIndices);
+
     for (const auto& line : prev_lines_) {
         auto inliers = processor_->findInliers(line, cartesian_cloud);
-        // processLine(line, inliers, cartesian_cloud);
-        RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of prev line: " << inliers.size());
+        // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of prev line: " << inliers.size());
         if(inliers.size() > u_int16_t(min_inliers)){
-            processLine(line, inliers, cartesian_cloud);
+            auto [optimized_coefficients, wall_poses] = processor_->handleLine(line, indices_to_remove, inliers, cartesian_cloud);
+            // Check if there are any walls detected on the line
+            if(wall_poses.size() < 1){
+                continue;
+            }  
+            // current_lines_.push_back(optimized_coefficients); // should be done after checking if there are walls
+            LineData data{optimized_coefficients, wall_poses, std::vector<bool>(wall_poses.size() / 2, true)};
+            linesData.push_back(data);
         }
     }
+    // RCLCPP_INFO_STREAM(this->get_logger(), "inliers to remove: " << indices_to_remove.size());
+    filterLines(linesData);
+    std::vector<pcl::PointXYZ> walls_poses;
 
+    for (const auto& data : linesData) {
+        walls_poses.insert(walls_poses.end(), data.wall_poses.begin(), data.wall_poses.end());
+        current_lines_.push_back(data.coefficients);
+    }
+    RCLCPP_INFO(this->get_logger(), "number of current lines: %zu", current_lines_.size());
+   
+
+    // Can either publish all walls or only the ones that are not removed
+    auto ros_wall_poses = getWallPoses(walls_poses);
+    wall_poses_.poses.insert(wall_poses_.poses.end(), ros_wall_poses.poses.begin(), ros_wall_poses.poses.end());
+    
+    auto indices_behind_walls = processor_->getPointsBehindWalls(cartesian_cloud, walls_poses);
+
+    indices_to_remove.insert(indices_to_remove.end(), indices_behind_walls->indices.begin(), indices_behind_walls->indices.end());
+
+    processor_->extractPoints(cartesian_cloud, indices_to_remove);
+
+    indices_behind_walls->indices.clear();
+    indices_to_remove.clear();
+
+    //remove walls here and sort. If wall is removed, remove the corresponding line but still publish wall. Wall will likely be removed in next callback
+    std::vector<pcl::PointXYZ> new_walls_poses;
     // Set how many new lines to find for each callback
     int new_lines = this->get_parameter("new_lines").as_int();
     for (int i = 0; i < new_lines; i++) {
+        if(cartesian_cloud->size() < 2){
+            break;
+        }
         auto [coefficients, inliers] = processor_->findLineWithMSAC(cartesian_cloud);
-        RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of new line: " << inliers.size());
-        processLine(coefficients, inliers, cartesian_cloud);
+        // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of new line: " << inliers.size());
+        auto [optimized_coefficients, wall_poses] = processor_->handleLine(coefficients, indices_to_remove, inliers, cartesian_cloud);
+        if (wall_poses.size() > 0) {
+            current_lines_.push_back(optimized_coefficients);
+            new_walls_poses.insert(new_walls_poses.end(), wall_poses.begin(), wall_poses.end());
+        }
     }
+    // RCLCPP_INFO_STREAM(this->get_logger(), "new inliers to remove: " << indices_to_remove.size());
+
+    indices_behind_walls = processor_->getPointsBehindWalls(cartesian_cloud, new_walls_poses);
+    indices_to_remove.insert(indices_to_remove.end(), indices_behind_walls->indices.begin(), indices_behind_walls->indices.end());
+
+    processor_->extractPoints(cartesian_cloud, indices_to_remove);
+
+    // GeometryProcessor::sortLinesByProximityToOrigin(current_lines_);
+
+    auto new_ros_wall_poses = getWallPoses(new_walls_poses);
+    wall_poses_.poses.insert(wall_poses_.poses.end(), new_ros_wall_poses.poses.begin(), new_ros_wall_poses.poses.end());
 
     publishLineMarkerArray(current_lines_, cloud_msg->header.frame_id);
     publishWallMarkerArray(wall_poses_, cloud_msg->header.frame_id);
