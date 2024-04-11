@@ -207,7 +207,7 @@ void pcl_detector::PclProcessor::addOrMergeWall(
     }
 }
 
-pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::vector<pcl::PointXYZ>& wall_poses){
+void pcl_detector::PclProcessor::getPointsBehindWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::vector<pcl::PointXYZ>& wall_poses, std::vector<int>& indices_to_remove){
     std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> polygons;
     polygons.reserve(wall_poses.size() / 2);
     for(size_t i = 0; i < wall_poses.size(); i+=2){
@@ -215,19 +215,18 @@ pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWalls(pcl::Poi
         polygons.push_back(polygon_cloud);
     }
 
-    pcl::PointIndices::Ptr indices_to_remove(new pcl::PointIndices());
     for (size_t i = 0; i < cloud->points.size(); ++i) {
         const auto& point = cloud->points[i];
         for(size_t j = 0; j < polygons.size(); j++){
             if (isXYPointIn2DXYPolygon(point, *polygons[j])) {
-                indices_to_remove->indices.push_back(i);
+                indices_to_remove.push_back(i);
                 break;
             }
         }
     
         
     }
-    return indices_to_remove;
+
 }
 
 pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_detector::PclProcessor::createPolygon(const pcl::PointXYZ& p1, const pcl::PointXYZ& p2) {

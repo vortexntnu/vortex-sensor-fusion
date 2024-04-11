@@ -277,9 +277,7 @@ void PclDetectorNode::processWalls(const std::vector<pcl::PointXYZ>& walls_poses
     wall_poses_.poses.insert(wall_poses_.poses.end(), ros_wall_poses.poses.begin(), ros_wall_poses.poses.end());
 
     
-    auto indices_behind_walls = processor_->getPointsBehindWalls(cartesian_cloud, walls_poses);
-
-    indices_to_remove_.insert(indices_to_remove_.end(), indices_behind_walls->indices.begin(), indices_behind_walls->indices.end());
+    processor_->getPointsBehindWalls(cartesian_cloud, walls_poses, indices_to_remove_);
 
     processor_->extractPoints(cartesian_cloud, indices_to_remove_);
 
