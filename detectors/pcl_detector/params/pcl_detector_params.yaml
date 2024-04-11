@@ -6,8 +6,9 @@ pcl_detector_node:
       model_iterations: 100 # Number of iterations for RANSAC
       prev_line_thresh: 1.0 # Threshold to count inliers for prev lines
       project_thresh: 0.75 # Threshold for point to remove close to walls
-      wall_min_dist: 2.0  # Minimum distance between points on line to extend wall
+      wall_neighbour_dist: 1.5  # Minimum distance between points on line to extend wall
       wall_min_points: 35  # Minimum number of points to consider a wall
+      wall_min_length: 5.0  # Minimum length of wall
       wall_merge_dist: 5.0 # Maximum distance between walls on same line to merge
     
     transform_lines: false

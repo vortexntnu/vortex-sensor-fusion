@@ -17,23 +17,16 @@
 namespace pcl_detector {
 
 PclProcessor::PclProcessor(float voxel_leaf_size, float model_thresh, int model_iterations,
-                 float prev_line_thresh, float project_thresh, float wall_min_dist, int wall_min_points, float wall_merge_dist)
+                 float prev_line_thresh, float project_thresh, float wall_neighbour_dist, int wall_min_points, float wall_min_length, float wall_merge_dist)
     : voxel_leaf_size_(voxel_leaf_size), model_thresh_(model_thresh),
       model_iterations_(model_iterations), prev_line_thresh_(prev_line_thresh),
-      project_thresh_(project_thresh), wall_min_dist_(wall_min_dist),
-      wall_min_points_(wall_min_points), wall_merge_dist_(wall_merge_dist) {}
+      project_thresh_(project_thresh), wall_neighbour_dist_(wall_neighbour_dist),
+      wall_min_points_(wall_min_points), wall_min_length_(wall_min_length), wall_merge_dist_(wall_merge_dist) {}
 
-std::vector<int> PclProcessor::removeNanPoints(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
-{
-    std::vector<int> indices;
-    pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
-    return indices;
-}
 
 void PclProcessor::applyPassThrough(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const std::string& field_name, float limit_min, float limit_max)
 {
-    std::vector<int> indices;
-    pcl::removeNaNFromPointCloud(*cloud, *cloud, indices);
+    // no need to remove NaN points, as the pass through filter does it, also resizes cloud, sets height and width. isOrganized is set to false
     pcl::PassThrough<pcl::PointXYZ> pass;
     pass.setInputCloud(cloud);
     pass.setFilterFieldName(field_name);
@@ -51,9 +44,10 @@ void PclProcessor::flattenPointCloud(pcl::PointCloud<pcl::PointXYZ>& cloud, floa
 void pcl_detector::PclProcessor::applyVoxelGrid(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
     pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+    std::cout << "Downsample all data: " << voxel_grid.getDownsampleAllData() << std::endl;
+    voxel_grid.setDownsampleAllData(false);
     voxel_grid.setInputCloud(cloud);
     voxel_grid.setLeafSize(voxel_leaf_size_, voxel_leaf_size_, voxel_leaf_size_);
-
     // Use the same point cloud object for the output
     voxel_grid.filter(*cloud);
 }
@@ -84,7 +78,7 @@ std::tuple<Eigen::VectorXf, std::vector<int>> pcl_detector::PclProcessor::findLi
 }
 
 
-std::tuple<Eigen::VectorXf, std::vector<pcl::PointXYZ>> pcl_detector::PclProcessor::handleLine(const Eigen::VectorXf& coefficients, std::vector<int>& wall_indices, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
+std::tuple<Eigen::VectorXf, std::vector<pcl::PointXYZ>> pcl_detector::PclProcessor::getWalls(const Eigen::VectorXf& coefficients, std::vector<int>& wall_indices, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
     auto optimized_coefficients = optimizeLine(coefficients, inliers, cloud);
     auto [projected_cloud, inliers_projected] = projectInliersOnLine(optimized_coefficients, cloud);
     sortProjectedPoints(inliers_projected, projected_cloud);
@@ -174,7 +168,7 @@ std::vector<pcl::PointXYZ> pcl_detector::PclProcessor::findWalls(pcl::PointCloud
         const auto& prev_point = projectedCloud->points[i - 1];
         double distance = std::hypot(point.x - prev_point.x, point.y - prev_point.y);
 
-        if (distance < wall_min_dist_) {
+        if (distance < wall_neighbour_dist_) {
             current_wall_indices.push_back(static_cast<int>(point.z));
             end_point = point;
             continue;
@@ -195,11 +189,12 @@ std::vector<pcl::PointXYZ> pcl_detector::PclProcessor::findWalls(pcl::PointCloud
 void pcl_detector::PclProcessor::addOrMergeWall(
     std::vector<int>& wall_indices, 
     std::vector<pcl::PointXYZ>& wall_poses, 
-    const std::vector<int>& current_wall_indices, 
+    const std::vector<int>& current_wall_indices,
     const pcl::PointXYZ& start_point, 
     const pcl::PointXYZ& end_point) {
 
-    if (current_wall_indices.size() > u_int16_t(wall_min_points_)) {
+    if ((current_wall_indices.size() > u_int16_t(wall_min_points_)) 
+        && std::hypot(start_point.x - end_point.x, start_point.y - end_point.y) > wall_min_length_){
         wall_indices.insert(wall_indices.end(), current_wall_indices.begin(), current_wall_indices.end());
         if (!wall_poses.empty() && std::hypot(start_point.x - wall_poses.back().x, start_point.y - wall_poses.back().y) < wall_merge_dist_) {
             // Merge with previous wall
@@ -214,6 +209,7 @@ void pcl_detector::PclProcessor::addOrMergeWall(
 
 pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::vector<pcl::PointXYZ>& wall_poses){
     std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> polygons;
+    polygons.reserve(wall_poses.size() / 2);
     for(size_t i = 0; i < wall_poses.size(); i+=2){
         pcl::PointCloud<pcl::PointXYZ>::Ptr polygon_cloud = createPolygon(wall_poses[i], wall_poses[i+1]);
         polygons.push_back(polygon_cloud);
@@ -223,7 +219,6 @@ pcl::PointIndices::Ptr pcl_detector::PclProcessor::getPointsBehindWalls(pcl::Poi
     for (size_t i = 0; i < cloud->points.size(); ++i) {
         const auto& point = cloud->points[i];
         for(size_t j = 0; j < polygons.size(); j++){
-            // Now isXYPointIn2DXYPolygon expects pcl::PointXYZ point and pcl::PointCloud<pcl::PointXYZ>
             if (isXYPointIn2DXYPolygon(point, *polygons[j])) {
                 indices_to_remove->indices.push_back(i);
                 break;
@@ -302,6 +297,7 @@ void pcl_detector::PclProcessor::extractPoints(pcl::PointCloud<pcl::PointXYZ>::P
 {
     // Extract doesn't care about unique indices, but if the size of the indices_to_remove is greater than pcl size then it fails
     // Sort indices to remove duplicates
+    if(indices_to_remove.size() >= cloud->size()){
     std::sort(indices_to_remove.begin(), indices_to_remove.end());
 
     // Unique removes consecutive duplicates and returns a new end iterator
@@ -309,10 +305,11 @@ void pcl_detector::PclProcessor::extractPoints(pcl::PointCloud<pcl::PointXYZ>::P
 
     // Erase the non-unique elements by specifying the new range
     indices_to_remove.erase(last, indices_to_remove.end());
-
+    }
 
     pcl::PointIndices::Ptr indices(new pcl::PointIndices);
     indices->indices = indices_to_remove;
+
 
     pcl::ExtractIndices<pcl::PointXYZ> extract;
     extract.setInputCloud(cloud);

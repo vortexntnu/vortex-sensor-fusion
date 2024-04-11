@@ -87,7 +87,6 @@ class PclDetectorNode : public rclcpp::Node
 
     std::tuple<Eigen::Vector3f, Eigen::Quaternionf> calculateTransformation(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg);
 
-    void processLine(const Eigen::VectorXf& line, std::vector<int> inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
 
     void publishLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
     void publishtfLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
@@ -97,6 +96,8 @@ class PclDetectorNode : public rclcpp::Node
     void publishExtendedLinesFromOrigin(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
 
     void filterLines(std::vector<LineData>& linesData);
+    void processWalls(const std::vector<pcl::PointXYZ>& walls_poses,
+    std::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& cartesian_cloud);
 
 
 
@@ -133,6 +134,7 @@ class PclDetectorNode : public rclcpp::Node
     std::vector<Eigen::VectorXf> current_lines_;
     std::vector<Eigen::VectorXf> prev_lines_;
     geometry_msgs::msg::PoseArray wall_poses_;
+    std::vector<int> indices_to_remove_;
 
 
     std::unordered_map<std::string, DetectorType> detector_type = {

@@ -13,9 +13,8 @@ public:
     
 
     PclProcessor(float voxel_leaf_size, float model_thresh, int model_iterations,
-                 float prev_line_thresh, float project_thresh, float wall_min_dist, int wall_min_points, float wall_merge_dist);
+                 float prev_line_thresh, float project_thresh, float wall_neighbour_dist, int wall_min_points, float wall_min_length, float wall_merge_dist);
 
-    std::vector<int> removeNanPoints(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
     void flattenPointCloud(pcl::PointCloud<pcl::PointXYZ>& cloud, float new_z_value);
     void applyVoxelGrid(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
     void applyPassThrough(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const std::string& field_name, float limit_min, float limit_max);
@@ -23,7 +22,7 @@ public:
     std::vector<int> findInliers(const Eigen::VectorXf& coefficients, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
     Eigen::VectorXf optimizeLine(Eigen::VectorXf model, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
     std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, std::vector<int>> projectInliersOnLine(const Eigen::VectorXf& coefficients, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
-    std::tuple<Eigen::VectorXf, std::vector<pcl::PointXYZ>> handleLine(
+    std::tuple<Eigen::VectorXf, std::vector<pcl::PointXYZ>> getWalls(
                     const Eigen::VectorXf& coefficients, std::vector<int>& wall_indices, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud);
     void sortProjectedPoints(const std::vector<int>& inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& projection);
     std::vector<pcl::PointXYZ> findWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& projectedCloud, std::vector<int>& wall_indices);
@@ -45,8 +44,9 @@ private:
     int model_iterations_;
     float prev_line_thresh_;
     float project_thresh_;
-    float wall_min_dist_;
+    float wall_neighbour_dist_;
     int wall_min_points_;
+    float wall_min_length_;
     float wall_merge_dist_;
 
     // std::vector<pcl::PointIndices> findLineClusters(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, float cluster_tolerance, int min_cluster_size, int max_cluster_size);
