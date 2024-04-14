@@ -50,6 +50,8 @@ TargetClassifierNode::TargetClassifierNode(const rclcpp::NodeOptions& options)
 
 void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArray::SharedPtr landmarks)
 {
+    vortex_msgs::msg::LandmarkArray classified_landmarks;
+
     // Transform the landmarks to the camera frame
     try {
         std::string camera_frame = get_parameter("camera_frame").as_string();
@@ -59,30 +61,50 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
         geometry_msgs::msg::TransformStamped transform_stamped = 
             tf_buffer_->lookupTransform(world_frame, camera_frame, rclcpp::Time(0), rclcpp::Duration(1, 0));
 
+
         for (auto& landmark : landmarks->landmarks) {
-            // Transform the point from landmark to the camera frame
-            Eigen::Vector3d landmark_world(landmark.odom.pose.pose.position.x,
-                                           landmark.odom.pose.pose.position.y,
-                                           landmark.odom.pose.pose.position.z);
-            Eigen::Vector3d landmark_camera;
+            
+            // Eigen::Vector3d landmark_camera;
+            geometry_msgs::msg::PointStamped landmark_world;
+            landmark_world.point.x = landmark.odom.pose.pose.position.x;
+            landmark_world.point.y = landmark.odom.pose.pose.position.y;
+            landmark_world.point.z = landmark.odom.pose.pose.position.z;
+            
+            geometry_msgs::msg::PointStamped landmark_camera;
             tf2::doTransform(landmark_world, landmark_camera, transform_stamped);
 
             // Normalized image coordinates
-            landmark_camera = landmark_camera / landmark_camera(2);
+            Eigen::Vector3d normalized_landmark_camera(landmark_camera.point.x/landmark_camera.point.z, landmark_camera.point.y/landmark_camera.point.z, 1);
 
             // Project the landmark to the image plane
-            Eigen::Vector3d landmark_pixel = camera_matrix_ * landmark_camera;
+            Eigen::Vector3d landmark_pixel = camera_matrix_ * normalized_landmark_camera;
+
+            for (auto& detection : image_detections_->detections) {
+                Eigen::Vector2d detection_center(detection.bbox.center.position.x, detection.bbox.center.position.y);
+                int detection_width = detection.bbox.size.x;
+                int detection_height = detection.bbox.size.y;
+                if (landmark_pixel(0) > detection_center(0) - detection_width / 2 &&
+                    landmark_pixel(0) < detection_center(0) + detection_width / 2 &&
+                    landmark_pixel(1) > detection_center(1) - detection_height / 2 &&
+                    landmark_pixel(1) < detection_center(1) + detection_height / 2) {
+                    landmark.classification = detection.classification;
+                    landmark.action = 2;
+                    classified_landmarks.landmarks.push_back(landmark);
+                    break;
+                }
+            }
         }
 
     } catch (tf2::TransformException &ex) {
-        RCLCPP_WARN(this->get_logger(), "Could not transform point cloud: %s", ex.what());
+        RCLCPP_WARN(this->get_logger(), "Could not transform landmarks %s", ex.what());
     }
+    // Publish the classified landmarks
+    landmark_publisher_->publish(classified_landmarks);
 }
 
 void TargetClassifierNode::image_detection_callback(const vortex_msgs::msg::DetectionArray::SharedPtr image_detections)
 {
     image_detections_ = image_detections;
-
 }
 
 void TargetClassifierNode::update_camera_matrix()
