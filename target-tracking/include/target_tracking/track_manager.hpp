@@ -7,7 +7,7 @@
 
 using State4d = vortex::prob::Gauss4d;
 using State2d = vortex::prob::Gauss<2>;
-using DynMod = vortex::models::ConstantVelocity<2>;
+using DynMod = vortex::models::ConstantVelocity;
 using SensorMod = vortex::models::IdentitySensorModel<4, 2>;
 using IPDA = vortex::filter::IPDA<DynMod, SensorMod>;
 
@@ -16,8 +16,6 @@ struct Track {
     State4d state;
     double existence_probability;
     bool confirmed;
-    std::vector<Eigen::Vector2d> previous;
-
 
     // For sorting tracks based on existence probability and confirmed track
     bool operator<(const Track &other) const {
