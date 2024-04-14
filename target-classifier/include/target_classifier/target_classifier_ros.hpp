@@ -68,5 +68,5 @@ private:
     Eigen::Matrix3d camera_matrix_;
 
     // Detections
-    vortex_msgs::msg::DetectionArray::SharedPtr image_detections_;
+    vortex_msgs::msg::LandmarkArray::SharedPtr landmarks_;
 };

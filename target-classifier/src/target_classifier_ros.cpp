@@ -50,6 +50,16 @@ TargetClassifierNode::TargetClassifierNode(const rclcpp::NodeOptions& options)
 
 void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArray::SharedPtr landmarks)
 {
+    landmarks_ = landmarks;
+}
+
+void TargetClassifierNode::image_detection_callback(const vortex_msgs::msg::DetectionArray::SharedPtr image_detections)
+{
+    // Check if landmarks and image detections are empty
+    if (image_detections->detections.empty() || landmarks_->landmarks.empty()) {
+        return;
+    }
+
     vortex_msgs::msg::LandmarkArray classified_landmarks;
 
     // Transform the landmarks to the camera frame
@@ -62,7 +72,7 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
             tf_buffer_->lookupTransform(world_frame, camera_frame, rclcpp::Time(0), rclcpp::Duration(1, 0));
 
 
-        for (auto& landmark : landmarks->landmarks) {
+        for (auto& landmark : landmarks_->landmarks) {
             
             // Eigen::Vector3d landmark_camera;
             geometry_msgs::msg::PointStamped landmark_world;
@@ -79,7 +89,7 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
             // Project the landmark to the image plane
             Eigen::Vector3d landmark_pixel = camera_matrix_ * normalized_landmark_camera;
 
-            for (auto& detection : image_detections_->detections) {
+            for (auto& detection : image_detections->detections) {
                 Eigen::Vector2d detection_center(detection.bbox.center.position.x, detection.bbox.center.position.y);
                 int detection_width = detection.bbox.size.x;
                 int detection_height = detection.bbox.size.y;
@@ -98,13 +108,12 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
     } catch (tf2::TransformException &ex) {
         RCLCPP_WARN(this->get_logger(), "Could not transform landmarks %s", ex.what());
     }
+
+    // Clear the landmarks
+    landmarks_->landmarks.clear();
+
     // Publish the classified landmarks
     landmark_publisher_->publish(classified_landmarks);
-}
-
-void TargetClassifierNode::image_detection_callback(const vortex_msgs::msg::DetectionArray::SharedPtr image_detections)
-{
-    image_detections_ = image_detections;
 }
 
 void TargetClassifierNode::update_camera_matrix()
