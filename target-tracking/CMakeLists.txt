@@ -6,7 +6,7 @@ if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
 
-# Default to C++14
+# Default to C++20
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 20)
 endif()
@@ -22,7 +22,7 @@ find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED)
-find_package(Eigen3 REQUIRED)
+find_package(Eigen3 3.4.0 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(vortex_filtering REQUIRED)
@@ -40,8 +40,6 @@ add_executable(${PROJECT_NAME}_node
 target_link_libraries( ${PROJECT_NAME}_node
   pcl_common
   Eigen3::Eigen
-  tf2_ros::tf2_ros
-  tf2_geometry_msgs::tf2_geometry_msgs
   ${PCL_LIBRARIES}
 )
 
