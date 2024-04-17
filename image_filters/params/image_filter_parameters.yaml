@@ -1,0 +1,26 @@
+image_filtering_node:
+  ros__parameters:
+    image_topic: "/flir_camera/image_raw"
+    filter_params:
+      filter_type: "ebus"
+      unsharpening:
+        blur_size: 8
+      erosion:
+        size: 1
+      dilation:
+        size: 1
+      white_balancing:
+        contrast_percentage: 0.8
+      ebus:
+        erosion_size: 2
+        blur_size: 30
+        mask_weight: 5
+
+
+#   NOFILTER = 0,
+#   SHARPENING = 1,
+#   UNSHARPENING = 2,
+#   ERODING = 3,
+#   DILATING = 4,
+#   WHITE_BALANCING = 5,
+#   EBUS = 6
