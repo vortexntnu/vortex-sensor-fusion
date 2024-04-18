@@ -11,16 +11,6 @@
 
 namespace vortex::image_filters
 {
-enum class FilterType {
-    nofilter,
-    sharpening,
-    unsharpening,
-    eroding,
-    dilating,
-    white_balancing,
-    ebus
-};
-
 
 struct UnsharpeningFilterParams {
     int blur_size;
@@ -51,53 +41,55 @@ struct FilterParams {
     DilatingFilterParams dilating;
     WhiteBalancingFilterParams white_balancing;
     EbusFilterParams ebus;
-
-std::map<std::string, FilterType> filter_map = {
-    {"nofilter", FilterType::nofilter},
-    {"sharpening", FilterType::sharpening},
-    {"unsharpening", FilterType::unsharpening},
-    {"eroding", FilterType::eroding},
-    {"dilating", FilterType::dilating},
-    {"white_balancing", FilterType::white_balancing},
-    {"ebus", FilterType::ebus}};
-
-    FilterType get_filter_type() {
-        return filter_map[filter_type];
-    }
-
 };
+
+typedef void (*FilterFunction)(const cv::Mat&, cv::Mat&, const FilterParams&);
+
+extern std::map<std::string, FilterFunction> filter_functions;
+
+
+/**
+ * No filter, just copy the image
+ */
+void no_filter(const cv::Mat &original, cv::Mat &modified, const FilterParams& filter_params);
 
 /**
  * Makes edges harder
  */
-void sharpeningFilter(const cv::Mat &original, cv::Mat &modified);
+void sharpening_filter(const cv::Mat &original, cv::Mat &modified, const FilterParams& filter_params);
+
 /**
  * Makes edges harder in a smarter way
  */
-void unsharpeningFilter(const cv::Mat &original, cv::Mat &modified, size_t blurSize = 1);
+void unsharpening_filter(const cv::Mat &original, cv::Mat &modified, const FilterParams& filter_params);
 
 /**
  * Expands the dark areas of the image
  */
-void erodingFilter(const cv::Mat &original, cv::Mat &modified, size_t erosionSize = 1);
+void eroding_filter(const cv::Mat &original, cv::Mat &modified, const FilterParams& filter_params);
 
 /**
  * Expands the bright areas of the image
  */
-void dilatingFilter(const cv::Mat &original, cv::Mat &modified, size_t dilationSize = 1);
+void dilating_filter(const cv::Mat &original, cv::Mat &modified, const FilterParams& filter_params);
 
 /**
  * White Balancing Filter
  */
-void whiteBalanceFilter(const cv::Mat &original, cv::Mat &filtered, double contrastPercentage = 0.2);
+void white_balance_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params);
 
 /**
  * A filter that worked well-ish in the mc-lab conditions easter 2023
  * Uses a combination of dilation and unsharpening
  */
-void ebusFilter(const cv::Mat &original, cv::Mat &filtered, size_t erosionSize = 2, size_t blurSize = 30, size_t maskWeight = 5);
+void ebus_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params);
 
-void apply_filter(const cv::Mat &original, cv::Mat &filtered, FilterParams &filter_params);
+
+/**
+ * Reads the filter_type from the FilterParams struct 
+ * and calls the appropriate filter function from the filter_functions map.
+ */
+void apply_filter(const cv::Mat &original, cv::Mat &filtered, FilterParams& filter_params);
 
 } // namespace image_filters
 #endif // IMAGE_PROCESSING_HPP

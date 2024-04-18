@@ -16,11 +16,5 @@ image_filtering_node:
         blur_size: 30
         mask_weight: 5
 
-
-#   NOFILTER = 0,
-#   SHARPENING = 1,
-#   UNSHARPENING = 2,
-#   ERODING = 3,
-#   DILATING = 4,
-#   WHITE_BALANCING = 5,
-#   EBUS = 6
+# Filter params should reflect the FilterParams struct 
+# defined in /include/image_filters/image_processing.hpp

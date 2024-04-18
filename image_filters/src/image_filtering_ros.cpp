@@ -33,9 +33,9 @@ ImageFilteringNode::ImageFilteringNode() : Node("image_filtering_node")
 void ImageFilteringNode::set_filter_params(){
     FilterParams params;
     params.filter_type = this->get_parameter("filter_params.filter_type").as_string();
-    if(!params.filter_map.contains(params.filter_type)){
-        RCLCPP_ERROR_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Invalid filter type: " << params.filter_type << " Setting to nofilter.");
-        params.filter_type = "nofilter";
+    if(!filter_functions.contains(params.filter_type)){
+        RCLCPP_ERROR_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Invalid filter type: " << params.filter_type << " Setting to no_filter.");
+        params.filter_type = "no_filter";
     }
     params.unsharpening.blur_size = this->get_parameter("filter_params.unsharpening.blur_size").as_int();
     params.eroding.size = this->get_parameter("filter_params.erosion.size").as_int();

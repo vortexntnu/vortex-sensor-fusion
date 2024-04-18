@@ -4,18 +4,35 @@
 namespace vortex::image_filters
 {
 
-void sharpeningFilter(const cv::Mat &original, cv::Mat &filtered)
+std::map<std::string, FilterFunction> filter_functions = {
+    {"no_filter", no_filter},
+    {"sharpening", sharpening_filter},
+    {"unsharpening", unsharpening_filter},
+    {"eroding", eroding_filter},
+    {"dilating", dilating_filter},
+    {"white_balancing", white_balance_filter},
+    {"ebus", ebus_filter}
+};
+
+void no_filter(const cv::Mat &original, cv::Mat &filtered,[[maybe_unused]] const FilterParams& filter_params)
+{
+	original.copyTo(filtered);
+}
+
+void sharpening_filter(const cv::Mat &original, cv::Mat &filtered,[[maybe_unused]] const FilterParams& filter_params)
 {
 	// Sharpen image
 	cv::Mat kernel = (cv::Mat_<float>(3, 3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
 	cv::filter2D(original, filtered, -1, kernel);
 }
 
-void unsharpeningFilter(const cv::Mat &original, cv::Mat &filtered, size_t blurSize)
+
+void unsharpening_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
 {
+	int blur_size = filter_params.unsharpening.blur_size;
 	// Create a blurred version of the image
 	cv::Mat blurred;
-	GaussianBlur(original, blurred, cv::Size(2 * blurSize + 1, 2 * blurSize + 1), 0);
+	GaussianBlur(original, blurred, cv::Size(2 * blur_size + 1, 2 * blur_size + 1), 0);
 
 	// Compute the unsharp mask
 	cv::Mat mask = original - blurred;
@@ -24,40 +41,45 @@ void unsharpeningFilter(const cv::Mat &original, cv::Mat &filtered, size_t blurS
 	addWeighted(original, 1, mask, 3, 0, filtered);
 }
 
-void erodingFilter(const cv::Mat &original, cv::Mat &filtered, size_t erosionSize)
+void eroding_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
 {
+	int erosion_size = filter_params.eroding.size;
 	// Create a structuring element for dilation and erosion
-	cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * erosionSize + 1, 2 * erosionSize + 1), cv::Point(erosionSize, erosionSize));
+	cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1), cv::Point(erosion_size, erosion_size));
 
 	// Apply erosion to the image
 	cv::erode(original, filtered, element);
 }
 
-void dilatingFilter(const cv::Mat &original, cv::Mat &filtered, size_t dilationSize)
+void dilating_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
 {
+	int dilation_size = filter_params.dilating.size;
 	// Create a structuring element for dilation and erosion
-	cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * dilationSize + 1, 2 * dilationSize + 1), cv::Point(dilationSize, dilationSize));
+	cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * dilation_size + 1, 2 * dilation_size + 1), cv::Point(dilation_size, dilation_size));
 
 	// Apply dilation to the image
 	cv::dilate(original, filtered, element);
 }
 
-void whiteBalanceFilter(const cv::Mat &original, cv::Mat &filtered, double contrastPercentage)
+void white_balance_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
 {
+	double contrast_percentage = filter_params.white_balancing.contrast_percentage;
 	cv::Ptr<cv::xphoto::SimpleWB> balance = cv::xphoto::createSimpleWB();
-	balance->setP(contrastPercentage);
+	balance->setP(contrast_percentage);
 	balance->balanceWhite(original, filtered);
 }
 
-void ebusFilter(const cv::Mat &original, cv::Mat &filtered, size_t erosionSize, size_t blurSize, size_t maskWeight)
+void ebus_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
 {
+	int blur_size = filter_params.ebus.blur_size;
+	int mask_weight = filter_params.ebus.mask_weight;
 	// Erode image to make blacks more black
 	cv::Mat eroded;
-	erodingFilter(original, eroded, erosionSize);
+	eroding_filter(original, eroded, filter_params);
 
 	// Make an unsharp mask from original image
 	cv::Mat blurred;
-	GaussianBlur(original, blurred, cv::Size(2 * blurSize + 1, 2 * blurSize + 1), 0);
+	GaussianBlur(original, blurred, cv::Size(2 * blur_size + 1, 2 * blur_size + 1), 0);
 
 	// Compute the unsharp mask
 	cv::Mat mask = original - blurred;
@@ -65,45 +87,18 @@ void ebusFilter(const cv::Mat &original, cv::Mat &filtered, size_t erosionSize, 
 
 	// Add mask to the eroded image instead of the original
 	// Higher weight of mask will create a sharper but more noisy image
-	addWeighted(eroded, 1, mask, maskWeight, 0, filtered);
+	addWeighted(eroded, 1, mask, mask_weight, 0, filtered);
 }
 
-enum class Filter {
-	NoFilter,
-	Sharpening,
-	Unsharpening,
-	Eroding,
-	Dilating,
-	WhiteBalance,
-	Ebus,
-};
-
-void apply_filter(const cv::Mat &original, cv::Mat &filtered, FilterParams& filter_params) {
-    switch (filter_params.get_filter_type()) {
-    case FilterType::nofilter:
-        original.copyTo(filtered);
-        break;
-    case FilterType::sharpening:
-        sharpeningFilter(original, filtered);
-        break;
-    case FilterType::unsharpening:
-        unsharpeningFilter(original, filtered, filter_params.unsharpening.blur_size);
-        break;
-    case FilterType::eroding:
-        erodingFilter(original, filtered, filter_params.eroding.size);
-        break;
-    case FilterType::dilating:
-        dilatingFilter(original, filtered, filter_params.dilating.size);
-        break;
-    case FilterType::white_balancing:
-        whiteBalanceFilter(original, filtered, filter_params.white_balancing.contrast_percentage);
-        break;
-    case FilterType::ebus:
-        ebusFilter(original, filtered, filter_params.ebus.erosion_size, filter_params.ebus.blur_size, filter_params.ebus.mask_weight);
-        break;
-	default:
-		original.copyTo(filtered);
-		break;
+void apply_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
+{
+	// Find the filter in the filter_functions map
+    auto it = filter_functions.find(filter_params.filter_type);
+    if (it != filter_functions.end()) {
+		// Calls the filter function
+        it->second(original, filtered, filter_params);
+    } else {
+        original.copyTo(filtered);  // Default to no filter
     }
 }
 
