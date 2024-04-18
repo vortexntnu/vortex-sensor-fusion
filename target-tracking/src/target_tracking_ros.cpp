@@ -175,7 +175,7 @@ void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
         vortex_msgs::msg::Landmark landmark;
 
         // Sets landmark type
-        landmark.landmark_type = "boat";
+        landmark.landmark_type = 0;
 
         // creates landmark message
         landmark.id = track.id;

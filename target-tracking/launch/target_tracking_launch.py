@@ -11,7 +11,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 def generate_launch_description():
     
-    default_params_file = os.path.join(get_package_share_directory('sensor_fusion_launch'),'params','target_tracking_params.yaml')
+    default_params_file = os.path.join(get_package_share_directory('target_tracking'),'params','target_tracking_params.yaml')
     params_file = LaunchConfiguration('params_file')
     params_file_arg = DeclareLaunchArgument(
         'params_file',
@@ -72,11 +72,12 @@ def generate_launch_description():
     )
         
     return LaunchDescription([
+        params_file_arg,
         enable_pcl_detector_arg,
         enable_landmark_server_arg,
         enable_visualization_arg,
         target_tracking_node,
         pcl_detector_launch,
         landmark_server_node,
-        target_tracking_visualization_node,
+        target_tracking_visualization_node
     ])

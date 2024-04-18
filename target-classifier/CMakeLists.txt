@@ -24,6 +24,8 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(vortex_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(foxglove_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 include_directories(include)
 
@@ -45,6 +47,8 @@ ament_target_dependencies(${PROJECT_NAME}_node
   tf2_ros
   tf2_geometry_msgs
   vortex_msgs
+  foxglove_msgs
+  sensor_msgs
 )
 
 install(TARGETS ${PROJECT_NAME}_node
