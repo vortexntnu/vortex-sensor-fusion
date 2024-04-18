@@ -126,7 +126,9 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
 
 
     // Clear the detections
-    // image_detections_->detections.clear();
+    if (image_detections_ != nullptr) {
+        image_detections_->detections.clear();
+    }
 
     // Publish the classified landmarks
     landmark_publisher_->publish(classified_landmarks);
