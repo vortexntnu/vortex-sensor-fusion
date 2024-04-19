@@ -318,79 +318,107 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     processor_->applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
     processor_->applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
 
+    pcl::PointCloud<pcl::PointXYZ> land_mask = land_masker_.get_polygon();
 
-    processor_->flattenPointCloud(*cartesian_cloud, 0.0);
 
-    processor_->applyVoxelGrid(cartesian_cloud);
+    sensor_msgs::msg::PointCloud2 land_mask_msg_out;
+    try {       
 
-    bool transform_lines = this->get_parameter("transform_lines").as_bool();
-    if (transform_lines) {
-      transformLines(cloud_msg, prev_lines_);
-      publishtfLineMarkerArray(prev_lines_, cloud_msg->header.frame_id);
-    }
-    RCLCPP_INFO(this->get_logger(), "number of prev lines: %zu", prev_lines_.size());
+            sensor_msgs::msg::PointCloud2 land_mask_msg;
+            pcl::toROSMsg(land_mask, land_mask_msg);
+            land_mask_msg.header = cloud_msg->header;
+            std::string fixed_frame = "world";
+            // The transform to apply, for example from "sensor_frame" to "world_frame"
+            geometry_msgs::msg::TransformStamped transform_stamped = tf_buffer_->lookupTransform(fixed_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp, rclcpp::Duration(1, 0));
+
+            tf2::doTransform(land_mask_msg, land_mask_msg_out, transform_stamped);
+
+            
+        } catch (tf2::TransformException &ex) {
+            RCLCPP_ERROR(this->get_logger(), "Could not transform point cloud: %s", ex.what());
+        }
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr land_cloud_tf(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::fromROSMsg(land_mask_msg_out, *land_cloud_tf);
+
+    std::vector<int> land;
+    land_masker_.get_land(cartesian_cloud, *land_cloud_tf, land);
+
+    RCLCPP_INFO(this->get_logger(), "Land size: %zu", land.size());
+    processor_->extractPoints(cartesian_cloud, land);
+
+    // processor_->flattenPointCloud(*cartesian_cloud, 0.0);
+
+    // processor_->applyVoxelGrid(cartesian_cloud);
+
+    // bool transform_lines = this->get_parameter("transform_lines").as_bool();
+    // if (transform_lines) {
+    //   transformLines(cloud_msg, prev_lines_);
+    //   publishtfLineMarkerArray(prev_lines_, cloud_msg->header.frame_id);
+    // }
+    // RCLCPP_INFO(this->get_logger(), "number of prev lines: %zu", prev_lines_.size());
   
 
-    int min_inliers = this->get_parameter("prev_line_min_inliers").as_int();
+    // int min_inliers = this->get_parameter("prev_line_min_inliers").as_int();
 
-    std::vector<LineData> linesData;
+    // std::vector<LineData> linesData;
    
-    for (const auto& line : prev_lines_) {
+    // for (const auto& line : prev_lines_) {
 
-        auto inliers = processor_->findInliers(line, cartesian_cloud);
-        // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of prev line: " << inliers.size());
-        if(inliers.size() > u_int16_t(min_inliers)){
-            auto [optimized_coefficients, wall_poses] = processor_->getWalls(line, indices_to_remove_, inliers, cartesian_cloud);
-            // Check if there are any walls detected on the line
-            if(wall_poses.size() < 1){
-                continue;
-            }  
-            // current_lines_.push_back(optimized_coefficients); // should be done after checking if there are walls
-            LineData data{optimized_coefficients, wall_poses, std::vector<bool>(wall_poses.size() / 2, true)};
-            linesData.push_back(data);
-        }
-    }
-    // Filter lines to remove walls that are behind other walls and remove lines with no walls
-    filterLines(linesData);
-    std::vector<pcl::PointXYZ> walls_poses;
+    //     auto inliers = processor_->findInliers(line, cartesian_cloud);
+    //     // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of prev line: " << inliers.size());
+    //     if(inliers.size() > u_int16_t(min_inliers)){
+    //         auto [optimized_coefficients, wall_poses] = processor_->getWalls(line, indices_to_remove_, inliers, cartesian_cloud);
+    //         // Check if there are any walls detected on the line
+    //         if(wall_poses.size() < 1){
+    //             continue;
+    //         }  
+    //         // current_lines_.push_back(optimized_coefficients); // should be done after checking if there are walls
+    //         LineData data{optimized_coefficients, wall_poses, std::vector<bool>(wall_poses.size() / 2, true)};
+    //         linesData.push_back(data);
+    //     }
+    // }
+    // // Filter lines to remove walls that are behind other walls and remove lines with no walls
+    // filterLines(linesData);
+    // std::vector<pcl::PointXYZ> walls_poses;
 
-    for (const auto& data : linesData) {
-        walls_poses.insert(walls_poses.end(), data.wall_poses.begin(), data.wall_poses.end());
-        current_lines_.push_back(data.coefficients);
-    }
-    RCLCPP_INFO(this->get_logger(), "number of current lines: %zu", current_lines_.size());
+    // for (const auto& data : linesData) {
+    //     walls_poses.insert(walls_poses.end(), data.wall_poses.begin(), data.wall_poses.end());
+    //     current_lines_.push_back(data.coefficients);
+    // }
+    // RCLCPP_INFO(this->get_logger(), "number of current lines: %zu", current_lines_.size());
    
-    processWalls(walls_poses, cartesian_cloud);
+    // processWalls(walls_poses, cartesian_cloud);
 
     
-    std::vector<pcl::PointXYZ> new_walls_poses;
-    // Set how many new lines to find for each callback
-    int new_lines = this->get_parameter("new_lines").as_int();
-    for (int i = 0; i < new_lines; i++) {
-        // can't compute line with less than 2 points
-        if(cartesian_cloud->size() < 2){
-            break;
-        }
-        auto [coefficients, inliers] = processor_->findLineWithMSAC(cartesian_cloud);
-        // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of new line: " << inliers.size());
-        auto [optimized_coefficients, wall_poses] = processor_->getWalls(coefficients, indices_to_remove_, inliers, cartesian_cloud);
-        if (wall_poses.size() > 0) {
-            current_lines_.push_back(optimized_coefficients);
-            new_walls_poses.insert(new_walls_poses.end(), wall_poses.begin(), wall_poses.end());
-        }
-    }
-    processWalls(new_walls_poses, cartesian_cloud);
+    // std::vector<pcl::PointXYZ> new_walls_poses;
+    // // Set how many new lines to find for each callback
+    // int new_lines = this->get_parameter("new_lines").as_int();
+    // for (int i = 0; i < new_lines; i++) {
+    //     // can't compute line with less than 2 points
+    //     if(cartesian_cloud->size() < 2){
+    //         break;
+    //     }
+    //     auto [coefficients, inliers] = processor_->findLineWithMSAC(cartesian_cloud);
+    //     // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of new line: " << inliers.size());
+    //     auto [optimized_coefficients, wall_poses] = processor_->getWalls(coefficients, indices_to_remove_, inliers, cartesian_cloud);
+    //     if (wall_poses.size() > 0) {
+    //         current_lines_.push_back(optimized_coefficients);
+    //         new_walls_poses.insert(new_walls_poses.end(), wall_poses.begin(), wall_poses.end());
+    //     }
+    // }
+    // processWalls(new_walls_poses, cartesian_cloud);
 
-    wall_poses_.header = cloud_msg->header;
-    pose_array_publisher_->publish(wall_poses_);
+    // wall_poses_.header = cloud_msg->header;
+    // pose_array_publisher_->publish(wall_poses_);
 
-    publishLineMarkerArray(current_lines_, cloud_msg->header.frame_id);
-    publishWallMarkerArray(wall_poses_, cloud_msg->header.frame_id);
-    publishExtendedLinesFromOrigin(wall_poses_, cloud_msg->header.frame_id);
+    // publishLineMarkerArray(current_lines_, cloud_msg->header.frame_id);
+    // publishWallMarkerArray(wall_poses_, cloud_msg->header.frame_id);
+    // publishExtendedLinesFromOrigin(wall_poses_, cloud_msg->header.frame_id);
 
-    prev_lines_ = current_lines_;
-    current_lines_.clear();
-    wall_poses_.poses.clear();
+    // prev_lines_ = current_lines_;
+    // current_lines_.clear();
+    // wall_poses_.poses.clear();
 
 
     RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Filtered PointCloud to " << cartesian_cloud->size() << " points");

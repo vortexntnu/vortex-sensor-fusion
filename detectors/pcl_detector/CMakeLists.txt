@@ -25,6 +25,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(PCL REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
@@ -40,6 +41,7 @@ add_executable(${PROJECT_NAME}_node
   src/geometry_processor.cpp
   src/euclidean_clustering.cpp
   src/dbscan_detector.cpp
+  src/land_masking.cpp
 )
 
 target_link_libraries( ${PROJECT_NAME}_node

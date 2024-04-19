@@ -13,6 +13,7 @@
 #include <pcl_detector/detectors/euclidean_clustering.hpp>
 
 #include <pcl_detector/pcl_processor.hpp>
+#include <pcl_detector/land_masking.hpp>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
@@ -28,6 +29,8 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/buffer.h>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
+
 
 
     struct LineData {
@@ -135,6 +138,9 @@ class PclDetectorNode : public rclcpp::Node
     std::vector<Eigen::VectorXf> prev_lines_;
     geometry_msgs::msg::PoseArray wall_poses_;
     std::vector<int> indices_to_remove_;
+
+    
+    LandMasker land_masker_ = LandMasker(63.414614704428324, 10.398600798333675);
 
 
     std::unordered_map<std::string, DetectorType> detector_type = {
