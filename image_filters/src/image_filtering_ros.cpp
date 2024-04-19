@@ -2,10 +2,10 @@
 
 using std::placeholders::_1;
 
-namespace vortex::image_filters {
+namespace vortex::image_processing {
 
 
-ImageFilteringNode::ImageFilteringNode() : Node("image_filtering_node")
+ImageFilteringNode::ImageFilteringNode() : Node("image_filtering_node") 
 {
     this->declare_parameter<std::string>("image_topic", "/flir_camera/image_raw");
     this->declare_parameter<std::string>("filter_params.filter_type", "ebus");
@@ -16,7 +16,6 @@ ImageFilteringNode::ImageFilteringNode() : Node("image_filtering_node")
     this->declare_parameter<int>("filter_params.ebus.erosion_size", 2);
     this->declare_parameter<int>("filter_params.ebus.blur_size", 30);
     this->declare_parameter<int>("filter_params.ebus.mask_weight", 5);
-
 
     // Set up the QoS profile for the image subscriber
     rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
@@ -32,10 +31,12 @@ ImageFilteringNode::ImageFilteringNode() : Node("image_filtering_node")
 
 void ImageFilteringNode::set_filter_params(){
     FilterParams params;
-    params.filter_type = this->get_parameter("filter_params.filter_type").as_string();
-    if(!filter_functions.contains(params.filter_type)){
-        RCLCPP_ERROR_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Invalid filter type: " << params.filter_type << " Setting to no_filter.");
-        params.filter_type = "no_filter";
+    std::string filter = this->get_parameter("filter_params.filter_type").as_string();
+    if(!filter_functions.contains(filter)){
+        RCLCPP_ERROR_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Invalid filter type: " << filter << " Setting to no_filter.");
+        filter_ = "no_filter";
+    } else{
+        filter_ = filter;
     }
     params.unsharpening.blur_size = this->get_parameter("filter_params.unsharpening.blur_size").as_int();
     params.eroding.size = this->get_parameter("filter_params.erosion.size").as_int();
@@ -110,9 +111,9 @@ void ImageFilteringNode::image_callback(const sensor_msgs::msg::Image::SharedPtr
     
     cv::Mat input_image = cv_ptr->image;
     cv::Mat filtered_image;
-    apply_filter(input_image, filtered_image, filter_params_);
+    apply_filter(filter_, filter_params_, input_image, filtered_image);
     auto message = cv_bridge::CvImage(msg->header, "bgr8", filtered_image).toImageMsg();
     
     image_pub_->publish(*message);
 }
-} // namespace vortex::image_filters
+} // namespace vortex::image_processing

@@ -1,25 +1,15 @@
 #include <image_filters/image_processing.hpp>
 #include <iostream>
 
-namespace vortex::image_filters
+namespace vortex::image_processing
 {
 
-std::map<std::string, FilterFunction> filter_functions = {
-    {"no_filter", no_filter},
-    {"sharpening", sharpening_filter},
-    {"unsharpening", unsharpening_filter},
-    {"eroding", eroding_filter},
-    {"dilating", dilating_filter},
-    {"white_balancing", white_balance_filter},
-    {"ebus", ebus_filter}
-};
-
-void no_filter(const cv::Mat &original, cv::Mat &filtered,[[maybe_unused]] const FilterParams& filter_params)
+void no_filter([[maybe_unused]] const FilterParams& params, const cv::Mat &original, cv::Mat &filtered)
 {
 	original.copyTo(filtered);
 }
 
-void sharpening_filter(const cv::Mat &original, cv::Mat &filtered,[[maybe_unused]] const FilterParams& filter_params)
+void sharpening([[maybe_unused]] const FilterParams& params, const cv::Mat &original, cv::Mat &filtered)
 {
 	// Sharpen image
 	cv::Mat kernel = (cv::Mat_<float>(3, 3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
@@ -27,9 +17,9 @@ void sharpening_filter(const cv::Mat &original, cv::Mat &filtered,[[maybe_unused
 }
 
 
-void unsharpening_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
+void unsharpening(const FilterParams& params, const cv::Mat &original, cv::Mat &filtered)
 {
-	int blur_size = filter_params.unsharpening.blur_size;
+	int blur_size = params.unsharpening.blur_size;
 	// Create a blurred version of the image
 	cv::Mat blurred;
 	GaussianBlur(original, blurred, cv::Size(2 * blur_size + 1, 2 * blur_size + 1), 0);
@@ -41,9 +31,9 @@ void unsharpening_filter(const cv::Mat &original, cv::Mat &filtered, const Filte
 	addWeighted(original, 1, mask, 3, 0, filtered);
 }
 
-void eroding_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
+void eroding(const FilterParams& params, const cv::Mat &original, cv::Mat &filtered)
 {
-	int erosion_size = filter_params.eroding.size;
+	int erosion_size = params.eroding.size;
 	// Create a structuring element for dilation and erosion
 	cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1), cv::Point(erosion_size, erosion_size));
 
@@ -51,9 +41,9 @@ void eroding_filter(const cv::Mat &original, cv::Mat &filtered, const FilterPara
 	cv::erode(original, filtered, element);
 }
 
-void dilating_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
+void dilating(const FilterParams& params, const cv::Mat &original, cv::Mat &filtered)
 {
-	int dilation_size = filter_params.dilating.size;
+	int dilation_size = params.dilating.size;
 	// Create a structuring element for dilation and erosion
 	cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * dilation_size + 1, 2 * dilation_size + 1), cv::Point(dilation_size, dilation_size));
 
@@ -61,21 +51,27 @@ void dilating_filter(const cv::Mat &original, cv::Mat &filtered, const FilterPar
 	cv::dilate(original, filtered, element);
 }
 
-void white_balance_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
+void white_balance(const FilterParams& params, const cv::Mat &original, cv::Mat &filtered)
 {
-	double contrast_percentage = filter_params.white_balancing.contrast_percentage;
+	double contrast_percentage = params.white_balancing.contrast_percentage;
 	cv::Ptr<cv::xphoto::SimpleWB> balance = cv::xphoto::createSimpleWB();
 	balance->setP(contrast_percentage);
 	balance->balanceWhite(original, filtered);
 }
 
-void ebus_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
+void ebus(const FilterParams& params, const cv::Mat &original, cv::Mat &filtered)
 {
-	int blur_size = filter_params.ebus.blur_size;
-	int mask_weight = filter_params.ebus.mask_weight;
+	int blur_size = params.ebus.blur_size;
+	int mask_weight = params.ebus.mask_weight;
 	// Erode image to make blacks more black
 	cv::Mat eroded;
-	eroding_filter(original, eroded, filter_params);
+	
+	int erosion_size = params.eroding.size;
+	// Create a structuring element for dilation and erosion
+	cv::Mat element = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1), cv::Point(erosion_size, erosion_size));
+
+	// Apply erosion to the image
+	cv::erode(original, eroded, element);
 
 	// Make an unsharp mask from original image
 	cv::Mat blurred;
@@ -90,16 +86,13 @@ void ebus_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams&
 	addWeighted(eroded, 1, mask, mask_weight, 0, filtered);
 }
 
-void apply_filter(const cv::Mat &original, cv::Mat &filtered, const FilterParams& filter_params)
+void apply_filter(const std::string& filter, const FilterParams& params, const cv::Mat &original, cv::Mat &filtered)
 {
-	// Find the filter in the filter_functions map
-    auto it = filter_functions.find(filter_params.filter_type);
-    if (it != filter_functions.end()) {
-		// Calls the filter function
-        it->second(original, filtered, filter_params);
+	if(filter_functions.contains(filter)){
+		((filter_functions.at(filter)))(params, original, filtered);
     } else {
         original.copyTo(filtered);  // Default to no filter
     }
 }
 
-} // namespace vortex::image_filters
+} // namespace vortex::image_processing

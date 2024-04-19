@@ -11,7 +11,7 @@
 
 
 
-namespace vortex::image_filters
+namespace vortex::image_processing
 {
 class ImageFilteringNode : public rclcpp::Node{
 
@@ -93,10 +93,16 @@ private:
     std::string image_topic_;
 
     /**
-     * @brief Struct to hold the filter parameters
+     * @brief The filter parameters
      * 
     */
     FilterParams filter_params_;
+    
+    /**
+     * @brief filter to apply
+     * 
+    */
+    std::string filter_;
 
     /**
      * @brief Mutex to protect the callback functions
@@ -105,7 +111,7 @@ private:
     std::mutex callback_mutex_;
 };
 
-} // namespace vortex::image_filters
+} // namespace vortex::image_processing
 
 
 #endif // IMAGE_FILTERING_ROS_HPP
