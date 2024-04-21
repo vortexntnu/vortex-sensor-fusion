@@ -20,6 +20,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(pcl_conversions REQUIRED)
@@ -61,6 +62,7 @@ ament_target_dependencies(${PROJECT_NAME}_node
   geometry_msgs
   tf2_ros
   tf2_geometry_msgs
+  nav_msgs
 )
 
 # # Conditionally link CUDA libraries

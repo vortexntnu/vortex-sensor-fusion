@@ -53,6 +53,7 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 1), qos_profile);
   
   publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(param_topic_pointcloud_out_, qos);
+  poly_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/land_poly", qos);
   subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     param_topic_pointcloud_in_, qos, std::bind(&PclDetectorNode::topic_callback, this, _1));
     pose_array_publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("wall_poses", qos);
@@ -88,6 +89,8 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   // Initialize transform listener
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+    land_masker_.set_polygon();
 
 }
 
@@ -318,9 +321,10 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     processor_->applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
     processor_->applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
 
+
     pcl::PointCloud<pcl::PointXYZ> land_mask = land_masker_.get_polygon();
 
-
+    RCLCPP_INFO(this->get_logger(), "Land mask size: %zu", land_mask.size());
     sensor_msgs::msg::PointCloud2 land_mask_msg_out;
     try {       
 
@@ -328,19 +332,31 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
             pcl::toROSMsg(land_mask, land_mask_msg);
             land_mask_msg.header = cloud_msg->header;
             std::string fixed_frame = "world";
-            // The transform to apply, for example from "sensor_frame" to "world_frame"
+            // The transform to apply, for example from
             geometry_msgs::msg::TransformStamped transform_stamped = tf_buffer_->lookupTransform(fixed_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp, rclcpp::Duration(1, 0));
 
             tf2::doTransform(land_mask_msg, land_mask_msg_out, transform_stamped);
+            RCLCPP_INFO(this->get_logger(), "Transformed land mask to world frame");
+            
+            // std::cout << "Transformed x: " << land_mask_msg_out.data[0] << std::endl;
+            // std::cout << "Transformed y: " << land_mask_msg_out.data[1] << std::endl;
+            // std::cout << "Transformed z: " << land_mask_msg_out.data[2] << std::endl;
+            // std::cout << "Transform roll: " << land_mask_msg_out.data[3] << std::endl;
+            // std::cout << "Transform pitch: " << land_mask_msg_out.data[4] << std::endl;
+            // std::cout << "Transform yaw: " << land_mask_msg_out.data[5] << std::endl;
+
 
             
         } catch (tf2::TransformException &ex) {
             RCLCPP_ERROR(this->get_logger(), "Could not transform point cloud: %s", ex.what());
         }
-
+    land_mask_msg_out.header = cloud_msg->header;
+    if(land_mask_msg_out.data.size() > 0){
+    poly_pub_->publish(land_mask_msg_out);
+    }
     pcl::PointCloud<pcl::PointXYZ>::Ptr land_cloud_tf(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::fromROSMsg(land_mask_msg_out, *land_cloud_tf);
-
+    RCLCPP_INFO(this->get_logger(), "Land mask size: %zu", land_cloud_tf->size());
     std::vector<int> land;
     land_masker_.get_land(cartesian_cloud, *land_cloud_tf, land);
 

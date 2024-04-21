@@ -23,6 +23,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -107,13 +108,19 @@ class PclDetectorNode : public rclcpp::Node
 
 
 
+
+
  
     // ROS2 subscriber and related topic name
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
     std::string param_topic_pointcloud_in_;
+
+    // rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+
     
     // ROS2 publisher and related topic name 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr poly_pub_;
     std::string param_topic_pointcloud_out_;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr line_publisher;
@@ -141,6 +148,7 @@ class PclDetectorNode : public rclcpp::Node
 
     
     LandMasker land_masker_ = LandMasker(63.414614704428324, 10.398600798333675);
+    
 
 
     std::unordered_map<std::string, DetectorType> detector_type = {

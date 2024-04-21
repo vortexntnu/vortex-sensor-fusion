@@ -61,40 +61,46 @@ constexpr double LandMasker::deg2rad(double degrees) const
     }
 
     void LandMasker::processCoordinates(const std::vector<std::array<double, 2>>& coordinates) {
+        std::cout << "coords size: " << coordinates.size() << "\n";
     for (const auto& coord : coordinates) {
         std::array<double, 2> flat = lla2flat(coord[0], coord[1]);
-        pcl::PointXYZ point(flat[0], flat[1], 0); // Assuming z-coordinate is 0
+        pcl::PointXYZ point((float)flat[0], (float)flat[1], 0); // Assuming z-coordinate is 0
         polygon_.push_back(point);
     }
+        std::cout << "Polygon size: " << polygon_.size() << std::endl;
     }
 
     void LandMasker::setOrigin() {
-        //lidar ori
+        // lidar ori
         origin_lat_ = 63.414614704428324;
         origin_lon_ = 10.398600798333675;
-        //lidar pos
-        origin_lat_ = 63.414614704428324;
-        origin_lon_ = 10.398600798333675;
+        // //lidar pos
+        // origin_lat_ = 63.414614704428324;
+        // origin_lon_ = 10.398600798333675;
+
+        // origin_lat_ = 63.414660884931976;
+        // origin_lon_ = 10.398554661537544;
+
     }
 
     void LandMasker::set_polygon() {
         std::vector<std::array<double, 2>> coords = {
-        {63.41489120183045}, {10.39705552070149},
-        {63.41497265487507}, {10.39783732516908},
-        {63.41538547016246}, {10.397651181248118},
-        {63.415431749532054}, {10.398250978326427},
-        {63.415048554100395}, {10.398449531842004},
-        {63.41512075073269}, {10.399185834462275},
-        {63.41495229164123}, {10.399305793877936},
-        {63.41486158248972}, {10.398540535536645},
-        {63.41453021396673}, {10.398747362115373},
-        {63.4145246602717}, {10.398631539231284},
-        {63.414280296625655}, {10.39877218130482},
-        {63.41424142039905}, {10.398197203415958},
-        {63.4144598670836}, {10.398110336252891},
-        {63.41444505719146}, {10.397990376837232},
-        {63.41478938520484}, {10.397841461700548},
-        {63.41472089017681}, {10.397167207053899}, };
+        {63.41489120183045, 10.39705552070149},
+        {63.41497265487507, 10.39783732516908},
+        {63.41538547016246, 10.397651181248118},
+        {63.415431749532054, 10.398250978326427},
+        {63.415048554100395, 10.398449531842004},
+        {63.41512075073269, 10.399185834462275},
+        {63.41495229164123, 10.399305793877936},
+        {63.41486158248972, 10.398540535536645},
+        {63.41453021396673, 10.398747362115373},
+        {63.4145246602717, 10.398631539231284},
+        {63.414280296625655, 10.39877218130482},
+        {63.41424142039905, 10.398197203415958},
+        {63.4144598670836, 10.398110336252891},
+        {63.41444505719146, 10.397990376837232},
+        {63.41478938520484, 10.397841461700548},
+        {63.41472089017681, 10.397167207053899}, };
 
         processCoordinates(coords);}
 
@@ -109,7 +115,7 @@ constexpr double LandMasker::deg2rad(double degrees) const
     for (size_t i = 0; i < cloud->points.size(); ++i) {
         const auto& point = cloud->points[i];
         for(size_t j = 0; j < polygon.size(); j++){
-            if (isXYPointIn2DXYPolygon(point, polygon)) {
+            if (!isXYPointIn2DXYPolygon(point, polygon)) {
                 indices_to_remove.push_back(i);
                 break;
             }
