@@ -14,5 +14,5 @@ target_tracking_node:
     std_velocity: 0.2
     std_sensor: 0.5
     update_interval_ms: 500
-    world_frame: "world_frame"
+    world_frame: "world"
     publish_visualization: true

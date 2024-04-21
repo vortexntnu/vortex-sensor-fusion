@@ -24,7 +24,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("std_sensor", 0.5);
 
     declare_parameter<int>("update_interval_ms", 500);
-    declare_parameter<std::string>("world_frame", "world_frame");
+    declare_parameter<std::string>("world_frame", "world");
     declare_parameter<bool>("publish_visualization", true);
 
     // Set parameter callback

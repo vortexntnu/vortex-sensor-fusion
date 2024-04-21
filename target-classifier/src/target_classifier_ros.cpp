@@ -13,11 +13,11 @@ TargetClassifierNode::TargetClassifierNode(const rclcpp::NodeOptions& options)
     declare_parameter<std::string>("topic_landmarks_out", "target_classifier/bouys");
  
     // Parameters for the intrinsic camera matrix
-    declare_parameter<std::vector<double>>("camera_intrinsic",{1050.0, 1050.0, 960.0, 540.0});
-    declare_parameter<std::string>("subs.camera_info_topic", "/zed_node/zed/.../camera_info");
+    declare_parameter<std::vector<double>>("camera_intrinsic",{262.0032958984375, 262.0032958984375, 316.2785949707031, 180.38784790039062});
+    declare_parameter<std::string>("subs.camera_info_topic", "/zed/zed_node/left/camera_info");
 
-    declare_parameter<std::string>("camera_frame", "os_lidar");
-    declare_parameter<std::string>("world_frame", "world_frame");
+    declare_parameter<std::string>("camera_frame", "zed_left_camera_frame");
+    declare_parameter<std::string>("world_frame", "base_link");
 
     // Read parameters for subscriber and publisher
     param_topic_landmarks_in_ = get_parameter("topic_landmarks_in").as_string();
@@ -57,9 +57,21 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
     // if (image_detections_->detections.empty() || landmarks->landmarks.empty()) {
     //     return;
     // }
+    std::cout << "Landmarks received" << std::endl;
+
     vortex_msgs::msg::LandmarkArray classified_landmarks;
     foxglove_msgs::msg::ImageAnnotations image_annotations;
     foxglove_msgs::msg::PointsAnnotation point_annotations;
+    point_annotations.timestamp = this->now();
+    point_annotations.type = 1;
+    foxglove_msgs::msg::Color color;
+    color.r = 255;
+    color.g = 0;
+    color.b = 0;
+    color.a = 1;
+    point_annotations.outline_color = color;
+    point_annotations.fill_color = color;
+    point_annotations.thickness = 5;
 
     // Transform the landmarks to the camera frame
     try {
@@ -70,6 +82,18 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
         geometry_msgs::msg::TransformStamped transform_stamped = 
             tf_buffer_->lookupTransform(world_frame, camera_frame, rclcpp::Time(0), rclcpp::Duration(1, 0));
 
+        // Change cooridnate stystem from z up xfwd to z fwd x right
+        tf2::Quaternion q_y, q_z;
+        q_y.setRPY(0, -M_PI/2, 0);  // 90-degree rotation about y-axis
+        q_z.setRPY(0, 0, M_PI/2); // - 90-degree rotation about z-axis
+        tf2::Quaternion q_orig;
+        tf2::fromMsg(transform_stamped.transform.rotation, q_orig);
+        tf2::Quaternion q_new = q_z * q_y * q_orig;
+        // Update the rotation component of the transform
+        transform_stamped.transform.rotation = tf2::toMsg(q_new);
+
+
+
 
         for (auto& landmark : landmarks->landmarks) {
             
@@ -77,17 +101,19 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
             geometry_msgs::msg::PointStamped landmark_world;
             landmark_world.point.x = landmark.odom.pose.pose.position.x;
             landmark_world.point.y = landmark.odom.pose.pose.position.y;
-            landmark_world.point.z = landmark.odom.pose.pose.position.z;
+            landmark_world.point.z = landmark.odom.pose.pose.position.z - 0.5;
             
             geometry_msgs::msg::PointStamped landmark_camera;
             tf2::doTransform(landmark_world, landmark_camera, transform_stamped);
 
-            std::cout << "Landmark camera: " << landmark_camera.point.x << ", " << landmark_camera.point.y << ", " << landmark_camera.point.z << std::endl;
-
             // Check if the landmark is behind the camera
             if (landmark_camera.point.z <= 0) {
+                std::cout << "Point behind camera" << std::endl;   
+                std::cout << "Landmark camera: " << landmark_camera.point.x << ", " << landmark_camera.point.y << ", " << landmark_camera.point.z << std::endl;
                 continue;
             }
+
+            std::cout << "Landmark camera: " << landmark_camera.point.x << ", " << landmark_camera.point.y << ", " << landmark_camera.point.z << std::endl;
 
             // Normalized image coordinates
             Eigen::Vector3d normalized_landmark_camera(landmark_camera.point.x/landmark_camera.point.z, landmark_camera.point.y/landmark_camera.point.z, 1);
@@ -100,24 +126,26 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
             point.y = landmark_pixel(1);
             
             std::cout << "Landmark pixel: " << point.x << ", " << point.y << std::endl;
+            point_annotations.outline_colors.push_back(color);
             point_annotations.points.push_back(point);
+            
 
-            for (auto& detection : image_detections_->detections) {
-                Eigen::Vector2d detection_center(detection.bbox.center.position.x, detection.bbox.center.position.y);
-                int detection_width = detection.bbox.size.x;
-                int detection_height = detection.bbox.size.y;
-                if (landmark_pixel(0) > detection_center(0) - detection_width / 2 &&
-                    landmark_pixel(0) < detection_center(0) + detection_width / 2 &&
-                    landmark_pixel(1) > detection_center(1) - detection_height / 2 &&
-                    landmark_pixel(1) < detection_center(1) + detection_height / 2) {
+            // for (auto& detection : image_detections_->detections) {
+            //     Eigen::Vector2d detection_center(detection.bbox.center.position.x, detection.bbox.center.position.y);
+            //     int detection_width = detection.bbox.size.x;
+            //     int detection_height = detection.bbox.size.y;
+            //     if (landmark_pixel(0) > detection_center(0) - detection_width / 2 &&
+            //         landmark_pixel(0) < detection_center(0) + detection_width / 2 &&
+            //         landmark_pixel(1) > detection_center(1) - detection_height / 2 &&
+            //         landmark_pixel(1) < detection_center(1) + detection_height / 2) {
                     
-                    // Update the landmark classification
-                    landmark.classification = detection.classification;
-                    landmark.action = 2;
-                    classified_landmarks.landmarks.push_back(landmark);
-                    break;
-                }
-            }
+            //         // Update the landmark classification
+            //         landmark.classification = detection.classification;
+            //         landmark.action = 2;
+            //         classified_landmarks.landmarks.push_back(landmark);
+            //         break;
+            //     }
+            // }
         }
 
     } catch (tf2::TransformException &ex) {
@@ -135,6 +163,7 @@ void TargetClassifierNode::landmark_callback(const vortex_msgs::msg::LandmarkArr
 
     // Publish the pixel coordinates of the landmarks
     image_annotations.points.push_back(point_annotations);
+    landmark_pixel_publisher_->publish(image_annotations);
 }
 
 void TargetClassifierNode::image_detection_callback(const vortex_msgs::msg::DetectionArray::SharedPtr image_detections)
