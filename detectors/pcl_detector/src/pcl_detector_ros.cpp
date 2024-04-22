@@ -317,9 +317,9 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     pcl::fromROSMsg(*cloud_msg, *cartesian_cloud);
     // RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Received PointCloud with " << cartesian_cloud->size() << " points");
     RCLCPP_INFO(this->get_logger(), "Received PointCloud with %zu points", cartesian_cloud->size());
-    processor_->applyPassThrough(cartesian_cloud, "z", -2.0, 5.0);
-    processor_->applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
-    processor_->applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
+    // processor_->applyPassThrough(cartesian_cloud, "z", -2.0, 5.0);
+    // processor_->applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
+    // processor_->applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
 
 
     pcl::PointCloud<pcl::PointXYZ> land_mask = land_masker_.get_polygon();
