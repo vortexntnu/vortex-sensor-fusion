@@ -208,6 +208,7 @@ void pcl_detector::PclProcessor::addOrMergeWall(
 }
 
 void pcl_detector::PclProcessor::getPointsBehindWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::vector<pcl::PointXYZ>& wall_poses, std::vector<int>& indices_to_remove){
+    
     std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> polygons;
     polygons.reserve(wall_poses.size() / 2);
     for(size_t i = 0; i < wall_poses.size(); i+=2){
@@ -290,6 +291,38 @@ bool pcl_detector::PclProcessor::isXYPointIn2DXYPolygon (const pcl::PointXYZ& po
   }
 
   return (in_poly);
+}
+
+int pcl_detector::PclProcessor::pnpoly(int nvert, float *vertx, float *verty, float testx, float testy)
+{
+  int i, j, c = 0;
+  for (i = 0, j = nvert-1; i < nvert; j = i++) {
+    if ( ((verty[i]>testy) != (verty[j]>testy)) &&
+     (testx < (vertx[j]-vertx[i]) * (testy-verty[i]) / (verty[j]-verty[i]) + vertx[i]) )
+       c = !c;
+  }
+  return c;
+}
+
+void pcl_detector::PclProcessor::apply_landmask(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::PointXYZ>& land_mask)
+{
+    std::vector<float> vertx, verty;
+    for (const auto& point : land_mask.points) {
+        vertx.push_back(point.x);
+        verty.push_back(point.y);
+    }
+
+    std::vector<int> indices_to_remove;
+    for (size_t i = 0; i < cloud->points.size(); ++i) {
+        const auto& point = cloud->points[i];
+        // Using pnpoly to check if the point is within the land_mask polygon
+        if (!pnpoly(land_mask.points.size(), vertx.data(), verty.data(), point.x, point.y)) {
+            indices_to_remove.push_back(i);
+        }
+    }
+
+    // Function to remove points based on indices_to_remove
+    extractPoints(cloud, indices_to_remove);
 }
 
 void pcl_detector::PclProcessor::extractPoints(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, std::vector<int>& indices_to_remove)

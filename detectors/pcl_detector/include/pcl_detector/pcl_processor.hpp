@@ -32,6 +32,10 @@ public:
     pcl::PointCloud<pcl::PointXYZ>::Ptr createPolygon(const pcl::PointXYZ& p1, const pcl::PointXYZ& p2);
     bool isXYPointIn2DXYPolygon (const pcl::PointXYZ& point, const pcl::PointCloud<pcl::PointXYZ> &polygon);
     void extractPoints(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, std::vector<int>& indices_to_remove);
+    void apply_landmask(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::PointXYZ>& land_mask);
+    int pnpoly(int nvert, float *vertx, float *verty, float testx, float testy);
+
+
 
 
 

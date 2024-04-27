@@ -23,6 +23,7 @@
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <std_msgs/msg/header.hpp>
 #include <geometry_msgs/msg/pose_array.hpp>
+#include <geometry_msgs/msg/polygon_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -82,6 +83,9 @@ class PclDetectorNode : public rclcpp::Node
      */
     void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
 
+    void land_poly_callback(const geometry_msgs::msg::PolygonStamped::SharedPtr msg);
+
+
     rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
 
     geometry_msgs::msg::PoseArray getWallPoses(std::vector<pcl::PointXYZ> wall_poses);
@@ -113,6 +117,7 @@ class PclDetectorNode : public rclcpp::Node
  
     // ROS2 subscriber and related topic name
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
+    rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr poly_sub_;
     std::string param_topic_pointcloud_in_;
 
     // rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
@@ -121,6 +126,8 @@ class PclDetectorNode : public rclcpp::Node
     // ROS2 publisher and related topic name 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr poly_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr land_inlier_pub_;
+
     std::string param_topic_pointcloud_out_;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr line_publisher;
@@ -139,8 +146,9 @@ class PclDetectorNode : public rclcpp::Node
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
+    bool land_mask_set_ = false;
     bool parameters_changed_ = false;
-
+    geometry_msgs::msg::PolygonStamped land_mask_;
     std::vector<Eigen::VectorXf> current_lines_;
     std::vector<Eigen::VectorXf> prev_lines_;
     geometry_msgs::msg::PoseArray wall_poses_;

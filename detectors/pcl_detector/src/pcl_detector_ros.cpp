@@ -51,10 +51,16 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
   qos_profile.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
   auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 1), qos_profile);
+
+   rmw_qos_profile_t qos_profile_transient_local = rmw_qos_profile_parameters;
+   qos_profile_transient_local.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
+   auto qos_transient_local = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_transient_local.history, 1), qos_profile_transient_local);
+
   
-  publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(param_topic_pointcloud_out_, qos);
-  poly_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/land_poly", qos);
-  subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+    publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(param_topic_pointcloud_out_, qos);
+    poly_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/land_poly", qos);
+    land_inlier_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/land_inliers", qos);
+    subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     param_topic_pointcloud_in_, qos, std::bind(&PclDetectorNode::topic_callback, this, _1));
     pose_array_publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("wall_poses", qos);
     line_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("line_marker_array", qos);
@@ -62,6 +68,10 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
 
     wall_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("wall_marker_array", qos);
     wall_cone_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("wall_marker_cone", qos);
+
+    poly_sub_ = this->create_subscription<geometry_msgs::msg::PolygonStamped>("landmask", qos_transient_local, std::bind(&PclDetectorNode::land_poly_callback, this, _1));
+
+
 
 
   // Define a handle for validating parameters during runtime  
@@ -92,6 +102,13 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
 
     land_masker_.set_polygon();
 
+}
+
+void PclDetectorNode::land_poly_callback(const geometry_msgs::msg::PolygonStamped::SharedPtr msg){
+    land_mask_ = *msg;
+    land_mask_set_ = true;
+    poly_sub_.reset();
+    RCLCPP_INFO(this->get_logger(), "Received land mask of size %zu", land_mask_.polygon.points.size());
 }
 
 // Callback function for parameter changes
@@ -317,148 +334,163 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     pcl::fromROSMsg(*cloud_msg, *cartesian_cloud);
     // RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Received PointCloud with " << cartesian_cloud->size() << " points");
     RCLCPP_INFO(this->get_logger(), "Received PointCloud with %zu points", cartesian_cloud->size());
-    // processor_->applyPassThrough(cartesian_cloud, "z", -2.0, 5.0);
+
+    // Find the minimum z value of points in pcl
+    double min_z = std::numeric_limits<double>::max();
+    for (const auto& point : cartesian_cloud->points) {
+        if (point.z < min_z) {
+            min_z = point.z;
+        }
+    }
+
+    // Print the minimum z value
+    RCLCPP_INFO(this->get_logger(), "Minimum z value: %f", min_z);
+    processor_->applyPassThrough(cartesian_cloud, "z", -0.6, 15.0);
     // processor_->applyPassThrough(cartesian_cloud, "x", -50.0, 50.0);
     // processor_->applyPassThrough(cartesian_cloud, "y", -50.0, 50.0);
 
+    if(land_mask_set_){
+        geometry_msgs::msg::PolygonStamped land_mask_tf;
+        try
+        {
+            geometry_msgs::msg::TransformStamped transform_stamped = tf_buffer_->lookupTransform(land_mask_.header.frame_id, cloud_msg->header.frame_id, cloud_msg->header.stamp, rclcpp::Duration(1, 0));
+            tf2::doTransform(land_mask_, land_mask_tf, transform_stamped);
+            // RCLCPP_INFO(this->get_logger(), "Transformed land mask to world frame");
 
-    pcl::PointCloud<pcl::PointXYZ> land_mask = land_masker_.get_polygon();
+            pcl::PointCloud<pcl::PointXYZ> land_mask_cloud_tf;
 
-    RCLCPP_INFO(this->get_logger(), "Land mask size: %zu", land_mask.size());
-    sensor_msgs::msg::PointCloud2 land_mask_msg_out;
-    try {       
+            for (const auto& point : land_mask_tf.polygon.points) {
+                pcl::PointXYZ pcl_point;
+                pcl_point.x = point.x;
+                pcl_point.y = point.y;
+                pcl_point.z = point.z;
+                land_mask_cloud_tf.push_back(pcl_point);
+            }
 
-            sensor_msgs::msg::PointCloud2 land_mask_msg;
-            pcl::toROSMsg(land_mask, land_mask_msg);
-            land_mask_msg.header = cloud_msg->header;
-            std::string fixed_frame = "world";
-            // The transform to apply, for example from
-            geometry_msgs::msg::TransformStamped transform_stamped = tf_buffer_->lookupTransform(fixed_frame, cloud_msg->header.frame_id, cloud_msg->header.stamp, rclcpp::Duration(1, 0));
-
-            tf2::doTransform(land_mask_msg, land_mask_msg_out, transform_stamped);
-            RCLCPP_INFO(this->get_logger(), "Transformed land mask to world frame");
-            
-            // std::cout << "Transformed x: " << land_mask_msg_out.data[0] << std::endl;
-            // std::cout << "Transformed y: " << land_mask_msg_out.data[1] << std::endl;
-            // std::cout << "Transformed z: " << land_mask_msg_out.data[2] << std::endl;
-            // std::cout << "Transform roll: " << land_mask_msg_out.data[3] << std::endl;
-            // std::cout << "Transform pitch: " << land_mask_msg_out.data[4] << std::endl;
-            // std::cout << "Transform yaw: " << land_mask_msg_out.data[5] << std::endl;
-
-
-            
-        } catch (tf2::TransformException &ex) {
+            processor_->apply_landmask(cartesian_cloud, land_mask_cloud_tf);
+            RCLCPP_INFO(this->get_logger(), "Points after applying land mask: %zu", cartesian_cloud->size());
+            sensor_msgs::msg::PointCloud2 polygon_cloud_msg;
+            pcl::toROSMsg(land_mask_cloud_tf, polygon_cloud_msg);
+            polygon_cloud_msg.header = cloud_msg->header;
+            poly_pub_->publish(polygon_cloud_msg);
+        }
+        catch(tf2::TransformException &ex)
+        {
             RCLCPP_ERROR(this->get_logger(), "Could not transform point cloud: %s", ex.what());
         }
-    land_mask_msg_out.header = cloud_msg->header;
-    if(land_mask_msg_out.data.size() > 0){
-    poly_pub_->publish(land_mask_msg_out);
-    }
-    pcl::PointCloud<pcl::PointXYZ>::Ptr land_cloud_tf(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromROSMsg(land_mask_msg_out, *land_cloud_tf);
-    RCLCPP_INFO(this->get_logger(), "Land mask size: %zu", land_cloud_tf->size());
-    std::vector<int> land;
-    land_masker_.get_land(cartesian_cloud, *land_cloud_tf, land);
+        
+    
 
-    RCLCPP_INFO(this->get_logger(), "Land size: %zu", land.size());
-    processor_->extractPoints(cartesian_cloud, land);
+   
+
+    
+
+    }
+
+    
 
     // processor_->flattenPointCloud(*cartesian_cloud, 0.0);
 
-    // processor_->applyVoxelGrid(cartesian_cloud);
+    processor_->applyVoxelGrid(cartesian_cloud);
 
-    // bool transform_lines = this->get_parameter("transform_lines").as_bool();
-    // if (transform_lines) {
-    //   transformLines(cloud_msg, prev_lines_);
-    //   publishtfLineMarkerArray(prev_lines_, cloud_msg->header.frame_id);
-    // }
-    // RCLCPP_INFO(this->get_logger(), "number of prev lines: %zu", prev_lines_.size());
+    sensor_msgs::msg::PointCloud2 land_inlier_cloud_msg;
+    pcl::toROSMsg(*cartesian_cloud, land_inlier_cloud_msg);
+    land_inlier_cloud_msg.header = cloud_msg->header;
+    land_inlier_pub_->publish(land_inlier_cloud_msg);
+
+
+    bool transform_lines = this->get_parameter("transform_lines").as_bool();
+    if (transform_lines) {
+      transformLines(cloud_msg, prev_lines_);
+      publishtfLineMarkerArray(prev_lines_, cloud_msg->header.frame_id);
+    }
+    RCLCPP_INFO(this->get_logger(), "number of prev lines: %zu", prev_lines_.size());
   
 
-    // int min_inliers = this->get_parameter("prev_line_min_inliers").as_int();
+    int min_inliers = this->get_parameter("prev_line_min_inliers").as_int();
 
-    // std::vector<LineData> linesData;
+    std::vector<LineData> linesData;
    
-    // for (const auto& line : prev_lines_) {
+    for (const auto& line : prev_lines_) {
 
-    //     auto inliers = processor_->findInliers(line, cartesian_cloud);
-    //     // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of prev line: " << inliers.size());
-    //     if(inliers.size() > u_int16_t(min_inliers)){
-    //         auto [optimized_coefficients, wall_poses] = processor_->getWalls(line, indices_to_remove_, inliers, cartesian_cloud);
-    //         // Check if there are any walls detected on the line
-    //         if(wall_poses.size() < 1){
-    //             continue;
-    //         }  
-    //         // current_lines_.push_back(optimized_coefficients); // should be done after checking if there are walls
-    //         LineData data{optimized_coefficients, wall_poses, std::vector<bool>(wall_poses.size() / 2, true)};
-    //         linesData.push_back(data);
-    //     }
-    // }
-    // // Filter lines to remove walls that are behind other walls and remove lines with no walls
-    // filterLines(linesData);
-    // std::vector<pcl::PointXYZ> walls_poses;
+        auto inliers = processor_->findInliers(line, cartesian_cloud);
+        // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of prev line: " << inliers.size());
+        if(inliers.size() > u_int16_t(min_inliers)){
+            auto [optimized_coefficients, wall_poses] = processor_->getWalls(line, indices_to_remove_, inliers, cartesian_cloud);
+            // Check if there are any walls detected on the line
+            if(wall_poses.size() < 1){
+                continue;
+            }  
+            // current_lines_.push_back(optimized_coefficients); // should be done after checking if there are walls
+            LineData data{optimized_coefficients, wall_poses, std::vector<bool>(wall_poses.size() / 2, true)};
+            linesData.push_back(data);
+        }
+    }
+    // Filter lines to remove walls that are behind other walls and remove lines with no walls
+    filterLines(linesData);
+    std::vector<pcl::PointXYZ> walls_poses;
 
-    // for (const auto& data : linesData) {
-    //     walls_poses.insert(walls_poses.end(), data.wall_poses.begin(), data.wall_poses.end());
-    //     current_lines_.push_back(data.coefficients);
-    // }
-    // RCLCPP_INFO(this->get_logger(), "number of current lines: %zu", current_lines_.size());
+    for (const auto& data : linesData) {
+        walls_poses.insert(walls_poses.end(), data.wall_poses.begin(), data.wall_poses.end());
+        current_lines_.push_back(data.coefficients);
+    }
+    RCLCPP_INFO(this->get_logger(), "number of current lines: %zu", current_lines_.size());
    
-    // processWalls(walls_poses, cartesian_cloud);
+    processWalls(walls_poses, cartesian_cloud);
 
     
-    // std::vector<pcl::PointXYZ> new_walls_poses;
-    // // Set how many new lines to find for each callback
-    // int new_lines = this->get_parameter("new_lines").as_int();
-    // for (int i = 0; i < new_lines; i++) {
-    //     // can't compute line with less than 2 points
-    //     if(cartesian_cloud->size() < 2){
-    //         break;
-    //     }
-    //     auto [coefficients, inliers] = processor_->findLineWithMSAC(cartesian_cloud);
-    //     // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of new line: " << inliers.size());
-    //     auto [optimized_coefficients, wall_poses] = processor_->getWalls(coefficients, indices_to_remove_, inliers, cartesian_cloud);
-    //     if (wall_poses.size() > 0) {
-    //         current_lines_.push_back(optimized_coefficients);
-    //         new_walls_poses.insert(new_walls_poses.end(), wall_poses.begin(), wall_poses.end());
-    //     }
-    // }
-    // processWalls(new_walls_poses, cartesian_cloud);
+    std::vector<pcl::PointXYZ> new_walls_poses;
+    // Set how many new lines to find for each callback
+    int new_lines = this->get_parameter("new_lines").as_int();
+    for (int i = 0; i < new_lines; i++) {
+        // can't compute line with less than 2 points
+        if(cartesian_cloud->size() < 2){
+            break;
+        }
+        auto [coefficients, inliers] = processor_->findLineWithMSAC(cartesian_cloud);
+        // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of new line: " << inliers.size());
+        auto [optimized_coefficients, wall_poses] = processor_->getWalls(coefficients, indices_to_remove_, inliers, cartesian_cloud);
+        if (wall_poses.size() > 0) {
+            current_lines_.push_back(optimized_coefficients);
+            new_walls_poses.insert(new_walls_poses.end(), wall_poses.begin(), wall_poses.end());
+        }
+    }
+    processWalls(new_walls_poses, cartesian_cloud);
 
-    // wall_poses_.header = cloud_msg->header;
-    // pose_array_publisher_->publish(wall_poses_);
+    wall_poses_.header = cloud_msg->header;
+    pose_array_publisher_->publish(wall_poses_);
 
-    // publishLineMarkerArray(current_lines_, cloud_msg->header.frame_id);
-    // publishWallMarkerArray(wall_poses_, cloud_msg->header.frame_id);
-    // publishExtendedLinesFromOrigin(wall_poses_, cloud_msg->header.frame_id);
+    publishLineMarkerArray(current_lines_, cloud_msg->header.frame_id);
+    publishWallMarkerArray(wall_poses_, cloud_msg->header.frame_id);
+    publishExtendedLinesFromOrigin(wall_poses_, cloud_msg->header.frame_id);
 
-    // prev_lines_ = current_lines_;
-    // current_lines_.clear();
-    // wall_poses_.poses.clear();
+    prev_lines_ = current_lines_;
+    current_lines_.clear();
+    wall_poses_.poses.clear();
 
 
     RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Filtered PointCloud to " << cartesian_cloud->size() << " points");
 
     // Finds clusters with the configured detector
-    // pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cartesian_cloud);
+    pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cartesian_cloud);
 
-    // if (detections.size() == 0) {
-    //     RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
-    // }
-
-    // Converts the clusters-PointCloud to an appropriate msg for publishing
-    sensor_msgs::msg::PointCloud2 downsampled_cloud_msg;
-    pcl::toROSMsg(*cartesian_cloud, downsampled_cloud_msg);
-    downsampled_cloud_msg.header = cloud_msg->header;
-
-    publisher_->publish(downsampled_cloud_msg);
+    if (detections.size() == 0) {
+        RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
+    }
 
     // Converts the clusters-PointCloud to an appropriate msg for publishing
-    // sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
-    // pcl::toROSMsg(detections, centroids_cloud_msg);
-    // centroids_cloud_msg.header = cloud_msg->header;
+    // sensor_msgs::msg::PointCloud2 downsampled_cloud_msg;
+    // pcl::toROSMsg(*cartesian_cloud, downsampled_cloud_msg);
+    // downsampled_cloud_msg.header = cloud_msg->header;
 
-    // publisher_->publish(centroids_cloud_msg);
+    // publisher_->publish(downsampled_cloud_msg);
+
+    // Converts the clusters-PointCloud to an appropriate msg for publishing
+    sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
+    pcl::toROSMsg(detections, centroids_cloud_msg);
+    centroids_cloud_msg.header = cloud_msg->header;
+
+    publisher_->publish(centroids_cloud_msg);
 }
 
 
