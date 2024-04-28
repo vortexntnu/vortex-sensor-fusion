@@ -26,6 +26,9 @@ find_package(vortex_msgs REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(foxglove_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
+#For testing
+find_package(eigen3_cmake_module REQUIRED)
+find_package(OpenMP         REQUIRED) # For parallel processing with Eigen
 
 include_directories(include)
 
@@ -60,5 +63,11 @@ install(DIRECTORY
   launch
   DESTINATION share/${PROJECT_NAME}/
 )
+
+if(BUILD_TESTING)
+  # add_compile_definitions(GNUPLOT_ENABLE=1)
+  add_subdirectory(test)
+endif()
+
 
 ament_package()

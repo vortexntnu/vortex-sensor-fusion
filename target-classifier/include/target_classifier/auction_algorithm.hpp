@@ -5,5 +5,5 @@
 #include <Eigen/Dense>
 
 
-Eigen::VectorXi auction_algorithm(const Eigen::MatrixXd &cost_matrix);
+Eigen::VectorXi auction_algorithm(const Eigen::MatrixXd &reward_matrix);
 

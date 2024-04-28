@@ -14,7 +14,6 @@ TargetClassifierNode::TargetClassifierNode(const rclcpp::NodeOptions& options)
  
     // Parameters for the intrinsic camera matrix
     declare_parameter<std::vector<double>>("camera_intrinsic",{262.0032958984375, 262.0032958984375, 316.2785949707031, 180.38784790039062});
-    declare_parameter<std::vector<int>>("camera_pixels", {720, 1280});
     declare_parameter<std::string>("subs.camera_info_topic", "/zed/zed_node/left/camera_info");
 
     declare_parameter<std::string>("camera_frame", "zed_left_camera_frame");
@@ -85,6 +84,17 @@ void TargetClassifierNode::timer_callback()
         Eigen::MatrixXd reward_matrix = generate_reward_matrix(image_detections_, pixel_coordinates);
 
         Eigen::VectorXi assignment = auction_algorithm(reward_matrix);
+
+        // Find the assigned landmarks and update the classification
+        for (int i = 0; i < assignment.size(); i++) {
+            if (assignment(i) < landmarks_->landmarks.size()){
+                vortex_msgs::msg::Landmark landmark = landmarks_->landmarks[assignment(i)];
+                landmark.classification = image_detections_->detections[i].class_id;
+                landmark.action = 2;
+                classified_landmarks.landmarks.push_back(landmark);
+            }
+        }
+
         // Publish the pixel coordinates of the landmarks
         visualize_landmark_pixels(pixel_coordinates);
     } 
@@ -232,7 +242,7 @@ Eigen::MatrixXd TargetClassifierNode::generate_reward_matrix(const vortex_msgs::
     // Initialize the reward matrix
     int num_detections = detections->detections.size();
     int num_landmarks = landmark_pixels.size();
-    Eigen::MatrixXd reward_matrix(num_detections + num_detections, num_landmarks);
+    Eigen::MatrixXd reward_matrix(num_detections + num_landmarks, num_landmarks);
     reward_matrix.fill(-1000.0);
 
     for (int i = 0; i < num_detections; i++) {
@@ -249,6 +259,10 @@ Eigen::MatrixXd TargetClassifierNode::generate_reward_matrix(const vortex_msgs::
                     double y = landmark_pixels[j](1) - detection_center(1);
                     double reward = 1/sqrt(x*x + y*y);
                     reward_matrix(i, j) = reward;
+            }
+
+            if (j == i) {
+                reward_matrix(i + num_landmarks, j) = -300;
             }
         }
     }
