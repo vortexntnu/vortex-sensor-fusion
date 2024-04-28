@@ -33,6 +33,7 @@ include_directories(include)
 add_executable(${PROJECT_NAME}_node 
   src/target_classifier_ros_node.cpp 
   src/target_classifier_ros.cpp 
+  src/auction_algorithm.cpp
 )
 
 target_link_libraries( ${PROJECT_NAME}_node

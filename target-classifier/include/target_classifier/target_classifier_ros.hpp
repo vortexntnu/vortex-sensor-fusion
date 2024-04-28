@@ -11,6 +11,7 @@
 #include <Eigen/Dense>
 #include <foxglove_msgs/msg/image_annotations.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#include <target_classifier/auction_algorithm.hpp>
 
 
 #include <vortex_msgs/msg/detection_array.hpp>
@@ -47,6 +48,16 @@ private:
 
     void update_camera_matrix();
 
+    void timer_callback();
+
+    void visualize_landmark_pixels(const std::vector<Eigen::Vector3d>& landmark_pixels);
+
+    geometry_msgs::msg::TransformStamped z_up_to_z_fwd(geometry_msgs::msg::TransformStamped transform_stamped);
+
+    std::vector<Eigen::Vector3d> get_pixel_coordinates(const geometry_msgs::msg::TransformStamped transform);
+
+    Eigen::MatrixXd generate_reward_matrix(const vortex_msgs::msg::DetectionArray::SharedPtr image_detections, const std::vector<Eigen::Vector3d>& landmark_pixels);
+
     // Landmark subscriber
     rclcpp::Subscription<vortex_msgs::msg::LandmarkArray>::SharedPtr landmark_subscriber_;
     std::string param_topic_landmarks_in_;
@@ -71,11 +82,17 @@ private:
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
+    // Timer
+    rclcpp::TimerBase::SharedPtr timer_;
+
     // Camera matrix
     Eigen::Matrix3d camera_matrix_;
 
     // Detections
     vortex_msgs::msg::DetectionArray::SharedPtr image_detections_;
+
+    // Landmarks
+    vortex_msgs::msg::LandmarkArray::SharedPtr landmarks_;
 
     // Camera info topic
     std::string camera_info_topic_;
