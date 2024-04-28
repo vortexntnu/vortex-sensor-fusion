@@ -13,9 +13,15 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <target_classifier/auction_algorithm.hpp>
 
-
-#include <vortex_msgs/msg/detection_array.hpp>
 #include <vortex_msgs/msg/detection.hpp>
+#include <vortex_msgs/msg/detection_array.hpp>
+
+#include <visualization_msgs/msg/marker_array.hpp>
+#include <visualization_msgs/msg/image_marker.hpp>
+// #include "std_msgs/msg/header.h"
+// #include "std_msgs/"
+// #include "geometry_msgs/Point.h"
+// #include "builtin_interfaces/msg/duration.hpp"
 
 
 class TargetClassifierNode : public rclcpp::Node {
@@ -77,6 +83,10 @@ private:
     // Landmark pixel coordinate publisher
     rclcpp::Publisher<foxglove_msgs::msg::ImageAnnotations>::SharedPtr landmark_pixel_publisher_;
     std::string param_topic_landmark_pixel_out_;
+
+    //detection publisher
+    rclcpp::Publisher<visualization_msgs::msg::ImageMarker>::SharedPtr detection_publisher_;
+    std::string param_topic_detections_out_;
 
     // Transform listener
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;

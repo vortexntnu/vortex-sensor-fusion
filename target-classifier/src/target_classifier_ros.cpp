@@ -43,6 +43,9 @@ TargetClassifierNode::TargetClassifierNode(const rclcpp::NodeOptions& options)
     landmark_publisher_ = this->create_publisher<vortex_msgs::msg::LandmarkArray>(param_topic_landmarks_out_, qos);
     landmark_pixel_publisher_ = this->create_publisher<foxglove_msgs::msg::ImageAnnotations>("landmark_pixel", qos);
 
+    //delete this
+    detection_publisher_ = this->create_publisher<visualization_msgs::msg::ImageMarker>("detection", qos);
+
     // Set timer
     int update_interval = get_parameter("update_interval_ms").as_int();
     timer_ = this->create_wall_timer(std::chrono::milliseconds(update_interval), std::bind(&TargetClassifierNode::timer_callback, this));
@@ -60,6 +63,64 @@ TargetClassifierNode::TargetClassifierNode(const rclcpp::NodeOptions& options)
 
 void TargetClassifierNode::timer_callback()
 {   
+    visualization_msgs::msg::ImageMarker marker;
+    // Set the frame ID and timestamp.
+    marker.header.frame_id = "map";
+    marker.header.stamp = rclcpp::Clock().now();
+
+    // Set the namespace and id for this marker.
+    marker.ns = "object_detection";
+    marker.id = 0;
+
+    // Set the marker type.
+    marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+
+    // Set the marker action. Options are ADD, DELETE, and new in ROS Indigo: DELETEALL
+    marker.action = visualization_msgs::msg::Marker::ADD;
+
+    // Set the pose of the marker.
+    marker.position.x = 100;
+    marker.position.y = 200;
+    marker.position.z = 0;
+    marker.scale = 1.0;
+    
+
+    // Set the color. Be sure to set alpha to something non-zero!
+    marker.outline_color.r = 1.0;
+    marker.outline_color.g = 0.0;
+    marker.outline_color.b = 0.0;
+    marker.outline_color.a = 1.0;
+
+    // Create the vertices for the points and lines
+    geometry_msgs::msg::Point p;
+    p.x = 100;
+    p.y = 200;
+    p.z = 0;
+    marker.points.push_back(p);
+
+    p.x = 200;
+    p.y = 200;
+    p.z = 0;
+    marker.points.push_back(p);
+
+    p.x = 200;
+    p.y = 300;
+    p.z = 0;
+    marker.points.push_back(p);
+
+    p.x = 100;
+    p.y = 300;
+    p.z = 0;
+    marker.points.push_back(p);
+
+    p.x = 100;
+    p.y = 200;
+    p.z = 0;
+    marker.points.push_back(p);
+
+    // Publish the marker
+    detection_publisher_->publish(marker);
+
     // Exit early if either pointer is nullptr
     if (image_detections_ == nullptr || landmarks_ == nullptr) {
     return;

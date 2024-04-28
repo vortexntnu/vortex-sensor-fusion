@@ -16,6 +16,9 @@
   <depend>tf2_geometry_msgs</depend>
   <depend>vortex_msgs</depend>
   <depend>foxglove_msgs</depend>
+  <depend>visulaization_msgs</depend>
+
+
   <exec_depend>ros2launch</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
