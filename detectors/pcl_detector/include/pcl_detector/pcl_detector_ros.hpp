@@ -13,7 +13,6 @@
 #include <pcl_detector/detectors/euclidean_clustering.hpp>
 
 #include <pcl_detector/pcl_processor.hpp>
-#include <pcl_detector/land_masking.hpp>
 
 #include <pcl/io/pcd_io.h>
 #include <pcl/point_types.h>
@@ -86,7 +85,7 @@ class PclDetectorNode : public rclcpp::Node
     void land_poly_callback(const geometry_msgs::msg::PolygonStamped::SharedPtr msg);
 
 
-    rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
+    rcl_interfaces::msg::SetParametersResult parameter_callback(const std::vector<rclcpp::Parameter> &parameters);
 
     geometry_msgs::msg::PoseArray getWallPoses(std::vector<pcl::PointXYZ> wall_poses);
 
@@ -153,11 +152,6 @@ class PclDetectorNode : public rclcpp::Node
     std::vector<Eigen::VectorXf> prev_lines_;
     geometry_msgs::msg::PoseArray wall_poses_;
     std::vector<int> indices_to_remove_;
-
-    
-    LandMasker land_masker_ = LandMasker(63.414614704428324, 10.398600798333675);
-    
-
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },

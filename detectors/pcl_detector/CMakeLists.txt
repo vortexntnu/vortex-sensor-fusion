@@ -54,7 +54,6 @@ add_executable(${PROJECT_NAME}_node
   src/geometry_processor.cpp
   src/euclidean_clustering.cpp
   src/dbscan_detector.cpp
-  src/land_masking.cpp
 )
 
 # include_directories(include)

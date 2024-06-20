@@ -4,10 +4,10 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
 #include <pcl/filters/extract_indices.h>
-#include <pcl/segmentation/extract_polygonal_prism_data.h>
 
-#include <pcl/sample_consensus/msac.h>
-#include <pcl/sample_consensus/sac_model_line.h>
+#include <pcl_detector/sample_consensus/msac.h>
+// #include <pcl/sample_consensus/sac_model_line.h>
+#include <pcl_detector/sample_consensus/sac_model_line_2d.hpp>
 #include <algorithm> 
 #include <vector>
 #include <cmath>
@@ -56,8 +56,8 @@ void pcl_detector::PclProcessor::applyVoxelGrid(pcl::PointCloud<pcl::PointXYZ>::
 std::tuple<Eigen::VectorXf, std::vector<int>> pcl_detector::PclProcessor::findLineWithMSAC(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) 
 {
     // Define a model for the line
-    pcl::SampleConsensusModelLine<pcl::PointXYZ>::Ptr 
-        model_l(new pcl::SampleConsensusModelLine<pcl::PointXYZ>(cloud));
+    pcl::SampleConsensusModelLine2D<pcl::PointXYZ>::Ptr 
+        model_l(new pcl::SampleConsensusModelLine2D<pcl::PointXYZ>(cloud));
 
     // Create the MSAC object
     pcl::MEstimatorSampleConsensus<pcl::PointXYZ> msac(model_l);
@@ -88,7 +88,7 @@ std::tuple<Eigen::VectorXf, std::vector<pcl::PointXYZ>> pcl_detector::PclProcess
 
 Eigen::VectorXf pcl_detector::PclProcessor::optimizeLine(Eigen::VectorXf model, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
-    pcl::SampleConsensusModelLine<pcl::PointXYZ>::Ptr model_l(new pcl::SampleConsensusModelLine<pcl::PointXYZ>(cloud));
+    pcl::SampleConsensusModelLine2D<pcl::PointXYZ>::Ptr model_l(new pcl::SampleConsensusModelLine2D<pcl::PointXYZ>(cloud));
     Eigen::VectorXf optimized_coefficients;
     model_l->optimizeModelCoefficients(inliers, model, optimized_coefficients);
     return optimized_coefficients;
@@ -96,7 +96,7 @@ Eigen::VectorXf pcl_detector::PclProcessor::optimizeLine(Eigen::VectorXf model, 
 
 std::vector<int> pcl_detector::PclProcessor::findInliers(const Eigen::VectorXf& coefficients, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
-    pcl::SampleConsensusModelLine<pcl::PointXYZ>::Ptr new_model_l(new pcl::SampleConsensusModelLine<pcl::PointXYZ>(cloud));
+    pcl::SampleConsensusModelLine2D<pcl::PointXYZ>::Ptr new_model_l(new pcl::SampleConsensusModelLine2D<pcl::PointXYZ>(cloud));
 
     std::vector<int> inliers;
     new_model_l->selectWithinDistance(coefficients, prev_line_thresh_, inliers);
@@ -106,7 +106,7 @@ std::vector<int> pcl_detector::PclProcessor::findInliers(const Eigen::VectorXf& 
 
 std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, std::vector<int>> pcl_detector::PclProcessor::projectInliersOnLine(const Eigen::VectorXf& coefficients, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
-    pcl::SampleConsensusModelLine<pcl::PointXYZ>::Ptr new_model_l(new pcl::SampleConsensusModelLine<pcl::PointXYZ>(cloud));
+    pcl::SampleConsensusModelLine2D<pcl::PointXYZ>::Ptr new_model_l(new pcl::SampleConsensusModelLine2D<pcl::PointXYZ>(cloud));
 
     std::vector<int> inliers;
     new_model_l->selectWithinDistance(coefficients, project_thresh_, inliers);
@@ -304,19 +304,13 @@ int pcl_detector::PclProcessor::pnpoly(int nvert, float *vertx, float *verty, fl
   return c;
 }
 
-void pcl_detector::PclProcessor::apply_landmask(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const pcl::PointCloud<pcl::PointXYZ>& land_mask)
+void pcl_detector::PclProcessor::apply_landmask(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int nvert, float* vertx, float* verty)
 {
-    std::vector<float> vertx, verty;
-    for (const auto& point : land_mask.points) {
-        vertx.push_back(point.x);
-        verty.push_back(point.y);
-    }
-
     std::vector<int> indices_to_remove;
     for (size_t i = 0; i < cloud->points.size(); ++i) {
         const auto& point = cloud->points[i];
         // Using pnpoly to check if the point is within the land_mask polygon
-        if (!pnpoly(land_mask.points.size(), vertx.data(), verty.data(), point.x, point.y)) {
+        if (!pnpoly(nvert, vertx, verty, point.x, point.y)) {
             indices_to_remove.push_back(i);
         }
     }
