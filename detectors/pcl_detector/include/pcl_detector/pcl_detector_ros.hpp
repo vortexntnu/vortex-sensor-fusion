@@ -33,13 +33,6 @@
 #include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
 
 
-
-    struct LineData {
-    Eigen::VectorXf coefficients;
-    std::vector<pcl::PointXYZ> wall_poses;
-    std::vector<bool> wallsActive;
-    };
-
 enum class DetectorType {
     Euclidean,
     DBSCAN,
@@ -84,48 +77,31 @@ class PclDetectorNode : public rclcpp::Node
 
     void land_poly_callback(const geometry_msgs::msg::PolygonStamped::SharedPtr msg);
 
-
     rcl_interfaces::msg::SetParametersResult parameter_callback(const std::vector<rclcpp::Parameter> &parameters);
 
-    geometry_msgs::msg::PoseArray getWallPoses(std::vector<pcl::PointXYZ> wall_poses);
+    void transform_lines(const std_msgs::msg::Header& cloud_header, std::vector<Eigen::VectorXf>& prev_lines);
 
-    void transformLines(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg, std::vector<Eigen::VectorXf>& prev_lines);
-
-
-    std::tuple<Eigen::Vector3f, Eigen::Quaternionf> calculateTransformation(const sensor_msgs::msg::PointCloud2::SharedPtr& cloud_msg);
+    void add_ros_wall_poses(const std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>>& wall_poses);
 
 
-    void publishLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
-    void publishtfLineMarkerArray(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
-
-    void publishWallMarkerArray(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
-    geometry_msgs::msg::Point ExtendLineFromOriginToLength(const geometry_msgs::msg::Point& point, double length);
-    void publishExtendedLinesFromOrigin(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
-
-    void filterLines(std::vector<LineData>& linesData);
-    void processWalls(const std::vector<pcl::PointXYZ>& walls_poses,
-    std::shared_ptr<pcl::PointCloud<pcl::PointXYZ>>& cartesian_cloud);
-
-
-
-
-
-
-
-
+    // visualization functions
+    void publish_line_marker_array(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
+    void publish_tf_line_marker_array(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
+    void publish_wall_marker_array(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
+    geometry_msgs::msg::Point extend_line_from_origin_to_length(const geometry_msgs::msg::Point& point, double length);
+    void publish_extended_lines_from_origin(const geometry_msgs::msg::PoseArray& pose_array, const std::string& frame_id);
  
     // ROS2 subscriber and related topic name
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
     rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr poly_sub_;
     std::string param_topic_pointcloud_in_;
-
-    // rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-
     
     // ROS2 publisher and related topic name 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr poly_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr land_inlier_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pre_wall_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr after_wall_pub_;
+
 
     std::string param_topic_pointcloud_out_;
 
@@ -151,7 +127,7 @@ class PclDetectorNode : public rclcpp::Node
     std::vector<Eigen::VectorXf> current_lines_;
     std::vector<Eigen::VectorXf> prev_lines_;
     geometry_msgs::msg::PoseArray wall_poses_;
-    std::vector<int> indices_to_remove_;
+    std::vector<int> wall_indices_;
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },

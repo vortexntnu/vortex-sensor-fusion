@@ -51,7 +51,6 @@ endif()
 add_executable(${PROJECT_NAME}_node 
   src/pcl_detector_ros_node.cpp 
   src/pcl_detector_ros.cpp 
-  src/geometry_processor.cpp
   src/euclidean_clustering.cpp
   src/dbscan_detector.cpp
 )

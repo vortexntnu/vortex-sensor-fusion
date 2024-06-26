@@ -9,6 +9,7 @@ def generate_launch_description():
             executable='pcl_detector_node',
             name='pcl_detector_node',
             parameters=[os.path.join(get_package_share_directory('pcl_detector'),'params','pcl_detector_params.yaml')],
+            # arguments=['--ros-args', '--log-level', 'DEBUG'],
             output='screen',
         )
     return LaunchDescription([

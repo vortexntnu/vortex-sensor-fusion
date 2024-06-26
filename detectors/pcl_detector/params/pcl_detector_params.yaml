@@ -1,9 +1,9 @@
 pcl_detector_node:
   ros__parameters:
     processor:
-      voxel_leaf_size: 0.1
-      model_thresh: 0.5   # Threshold for RANSAC model
-      model_iterations: 100 # Number of iterations for RANSAC
+      voxel_leaf_size: 0.25 # Voxel grid leaf size
+      model_thresh: 0.5   # Threshold for MSAC model
+      model_iterations: 100 # Number of iterations for MSAC
       prev_line_thresh: 1.0 # Threshold to count inliers for prev lines
       project_thresh: 0.75 # Threshold for point to remove close to walls
       wall_neighbour_dist: 1.5  # Minimum distance between points on line to extend wall
@@ -12,12 +12,13 @@ pcl_detector_node:
       wall_merge_dist: 5.0 # Maximum distance between walls on same line to merge
     
     apply_landmask: false
-    apply_voxelgrid: false
+    apply_voxelgrid: true
     detect_lines: true
     transform_lines: false
     transform_timeout_nsec: 50000000
     prev_line_min_inliers: 50
     new_lines: 1  # Number of new lines to find for new callback
+    fixed_frame: "world_frame"
     
 
     detector: "dbscan" # one of "dbscan", "euclidean"

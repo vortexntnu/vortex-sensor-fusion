@@ -1,12 +1,11 @@
 #include <pcl_detector/pcl_processor.hpp>
-#include <pcl_detector/geometry_processor.hpp>
 #include <pcl/filters/passthrough.h>
+
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
 #include <pcl/filters/extract_indices.h>
 
 #include <pcl_detector/sample_consensus/msac.h>
-// #include <pcl/sample_consensus/sac_model_line.h>
 #include <pcl_detector/sample_consensus/sac_model_line_2d.hpp>
 #include <algorithm> 
 #include <vector>
@@ -23,6 +22,14 @@ PclProcessor::PclProcessor(float voxel_leaf_size, float model_thresh, int model_
       project_thresh_(project_thresh), wall_neighbour_dist_(wall_neighbour_dist),
       wall_min_points_(wall_min_points), wall_min_length_(wall_min_length), wall_merge_dist_(wall_merge_dist) {}
 
+void PclProcessor::remove_zero_points(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+    cloud->erase(std::remove_if(cloud->points.begin(), cloud->points.end(),
+                                [](const pcl::PointXYZ& point) {
+                                    return point.x == 0.0f && point.y == 0.0f && point.z == 0.0f;
+                                }),
+                 cloud->points.end());
+}
 
 void PclProcessor::applyPassThrough(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, const std::string& field_name, float limit_min, float limit_max)
 {
@@ -34,26 +41,16 @@ void PclProcessor::applyPassThrough(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, 
     pass.filter(*cloud);
 }
 
-void PclProcessor::flattenPointCloud(pcl::PointCloud<pcl::PointXYZ>& cloud, float new_z_value)
-{
-    for (auto& point : cloud) {
-        point.z = new_z_value;
-    }
-}
-
-void pcl_detector::PclProcessor::applyVoxelGrid(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+void PclProcessor::apply_voxel_grid(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
     pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
-    std::cout << "Downsample all data: " << voxel_grid.getDownsampleAllData() << std::endl;
     voxel_grid.setDownsampleAllData(false);
     voxel_grid.setInputCloud(cloud);
     voxel_grid.setLeafSize(voxel_leaf_size_, voxel_leaf_size_, voxel_leaf_size_);
-    // Use the same point cloud object for the output
     voxel_grid.filter(*cloud);
 }
 
-
-std::tuple<Eigen::VectorXf, std::vector<int>> pcl_detector::PclProcessor::findLineWithMSAC(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) 
+std::tuple<Eigen::VectorXf, std::vector<int>> PclProcessor::find_line_with_MSAC(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) 
 {
     // Define a model for the line
     pcl::SampleConsensusModelLine2D<pcl::PointXYZ>::Ptr 
@@ -77,16 +74,17 @@ std::tuple<Eigen::VectorXf, std::vector<int>> pcl_detector::PclProcessor::findLi
     return {coefficients, inliers};
 }
 
-
-std::tuple<Eigen::VectorXf, std::vector<pcl::PointXYZ>> pcl_detector::PclProcessor::getWalls(const Eigen::VectorXf& coefficients, std::vector<int>& wall_indices, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud) {
-    auto optimized_coefficients = optimizeLine(coefficients, inliers, cloud);
-    auto [projected_cloud, inliers_projected] = projectInliersOnLine(optimized_coefficients, cloud);
-    sortProjectedPoints(inliers_projected, projected_cloud);
-    auto wall_poses = findWalls(projected_cloud, wall_indices); // findWalls now modifies wall_indices directly
+std::tuple<Eigen::VectorXf, std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>>> PclProcessor::get_walls(
+const Eigen::VectorXf& coefficients, std::vector<int>& wall_indices, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+{
+    auto optimized_coefficients = optimize_line(coefficients, inliers, cloud);
+    auto [projected_cloud, inliers_projected] = project_inliers_on_line(optimized_coefficients, cloud);
+    auto distances_and_indices = sort_projected_points(inliers_projected, projected_cloud);
+    auto wall_poses = find_walls_on_line(distances_and_indices, wall_indices, projected_cloud);
     return {optimized_coefficients, wall_poses};
 }
 
-Eigen::VectorXf pcl_detector::PclProcessor::optimizeLine(Eigen::VectorXf model, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+Eigen::VectorXf PclProcessor::optimize_line(Eigen::VectorXf model, std::vector<int> inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
     pcl::SampleConsensusModelLine2D<pcl::PointXYZ>::Ptr model_l(new pcl::SampleConsensusModelLine2D<pcl::PointXYZ>(cloud));
     Eigen::VectorXf optimized_coefficients;
@@ -94,7 +92,7 @@ Eigen::VectorXf pcl_detector::PclProcessor::optimizeLine(Eigen::VectorXf model, 
     return optimized_coefficients;
 }
 
-std::vector<int> pcl_detector::PclProcessor::findInliers(const Eigen::VectorXf& coefficients, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+std::vector<int> PclProcessor::get_inliers(const Eigen::VectorXf& coefficients, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
     pcl::SampleConsensusModelLine2D<pcl::PointXYZ>::Ptr new_model_l(new pcl::SampleConsensusModelLine2D<pcl::PointXYZ>(cloud));
 
@@ -104,13 +102,12 @@ std::vector<int> pcl_detector::PclProcessor::findInliers(const Eigen::VectorXf& 
     return inliers;
 }
 
-std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, std::vector<int>> pcl_detector::PclProcessor::projectInliersOnLine(const Eigen::VectorXf& coefficients, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
+std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, std::vector<int>> PclProcessor::project_inliers_on_line(const Eigen::VectorXf& coefficients, const pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud)
 {
     pcl::SampleConsensusModelLine2D<pcl::PointXYZ>::Ptr new_model_l(new pcl::SampleConsensusModelLine2D<pcl::PointXYZ>(cloud));
 
     std::vector<int> inliers;
     new_model_l->selectWithinDistance(coefficients, project_thresh_, inliers);
-    std::cout << "Inliers size after optimization: " << inliers.size() << std::endl;
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr projectedCloud(new pcl::PointCloud<pcl::PointXYZ>());
     new_model_l->projectPoints(inliers, coefficients, *projectedCloud, false);
@@ -118,182 +115,158 @@ std::tuple<pcl::PointCloud<pcl::PointXYZ>::Ptr, std::vector<int>> pcl_detector::
     return {projectedCloud, inliers};
 }
 
-
-void pcl_detector::PclProcessor::sortProjectedPoints(const std::vector<int>& inliers, pcl::PointCloud<pcl::PointXYZ>::Ptr& projectedCloud)
+std::vector<std::tuple<float, int, int>> PclProcessor::sort_projected_points(const std::vector<int>& inliers, const pcl::PointCloud<pcl::PointXYZ>::Ptr& projectedCloud)
 {
     if (inliers.empty())
     {
         PCL_ERROR("Inliers vector is empty.\n");
-        return;
+        return {};
     }
 
     // Variables to find the furthest point
     float maxDistance = -1.0f;
-    pcl::PointXYZ furthestPoint;
+    int start_index = -1;
 
-    // Find the furthest point from the origin in the copied projectedCloud cloud
-    // Also sets the z-value of each point in the projectedCloud to its original index in cloud
-        for (uint16_t i = 0; i < inliers.size(); i++) 
+    // Find the furthest point on the line from the origin(0,0,0) in the projectedCloud
+    // All other points will be sorted based on distance from this point
+    for (size_t i = 0; i < inliers.size(); ++i)
     {
         auto& point = projectedCloud->points[i];
-        point.z = static_cast<float>(inliers.at(i));
-        float distance = std::sqrt(point.x * point.x + point.y * point.y);
+        float distance = point.x * point.x + point.y * point.y;
+        
         if (distance > maxDistance)
         {
             maxDistance = distance;
-            furthestPoint = point;
+            start_index = i;
         }
     }
+    // Vector to store distances and original indices and indices in projected cloud
+    std::vector<std::tuple<float, int, int>> distances_and_indices(inliers.size());
 
-    // Sort the projectedCloud copy based on distance to the furthest point
-    std::sort(projectedCloud->points.begin(), projectedCloud->points.end(),
-              [&furthestPoint](const pcl::PointXYZ& p1, const pcl::PointXYZ& p2) -> bool {
-                  float dist1 = std::pow(p1.x - furthestPoint.x, 2) + std::pow(p1.y - furthestPoint.y, 2);
-                  float dist2 = std::pow(p2.x - furthestPoint.x, 2) + std::pow(p2.y - furthestPoint.y, 2);
-                  return dist1 < dist2;
+    const float x_0 = projectedCloud->points[start_index].x;
+    const float y_0 = projectedCloud->points[start_index].y;
+    // Calculate the squared distance of each point from the start point
+    for (size_t i = 0; i < inliers.size(); ++i)
+    {
+        const auto& point = projectedCloud->points[i];
+        const float distance = std::hypot(point.x - x_0, point.y - y_0);
+        distances_and_indices[i] = std::make_tuple(distance, inliers.at(i), i);
+    }
+
+
+    // Sort the distances_and_indices vector based on the calculated distance
+    std::sort(distances_and_indices.begin(), distances_and_indices.end(),
+              [](const std::tuple<float, int, int>& a, const std::tuple<float, int, int>& b) -> bool {
+                  return std::get<0>(a) < std::get<0>(b);
               });
 
+    // for (size_t i = 0; i < distances_and_indices.size(); ++i)
+    // {
+    //     std::cout << "Distance: " << std::get<0>(distances_and_indices[i]) << " Index: " << std::get<1>(distances_and_indices[i]) << " Index in projected cloud: " << std::get<2>(distances_and_indices[i]) << std::endl;
+    // }
+
+    return distances_and_indices;
 }
 
-
-std::vector<pcl::PointXYZ> pcl_detector::PclProcessor::findWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr& projectedCloud, std::vector<int>& wall_indices) {
-    std::vector<pcl::PointXYZ> wall_poses; 
-
-    int start_index = static_cast<int>(projectedCloud->points.front().z);
-    std::vector<int> current_wall_indices = {start_index};
-    pcl::PointXYZ start_point = projectedCloud->points.front(), end_point;
-
-    for (size_t i = 1; i < projectedCloud->points.size(); ++i) {
-        const auto& point = projectedCloud->points[i];
-        const auto& prev_point = projectedCloud->points[i - 1];
-        double distance = std::hypot(point.x - prev_point.x, point.y - prev_point.y);
-
-        if (distance < wall_neighbour_dist_) {
-            current_wall_indices.push_back(static_cast<int>(point.z));
-            end_point = point;
-            continue;
-        } else {
-            addOrMergeWall(wall_indices, wall_poses, current_wall_indices, start_point, end_point);
+std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>> PclProcessor::find_walls_on_line(const std::vector<std::tuple<float, int, int>>& distances_and_indices, std::vector<int>& wall_indices, const pcl::PointCloud<pcl::PointXYZ>::Ptr& projectedCloud)
+{
+    std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>> wall_poses;
+    // Get index of the first point in the original pointcloud
+    int wall_start_index = std::get<1>(distances_and_indices.front());
+    std::vector<int> current_wall_indices = {wall_start_index};
+    pcl::PointXYZ wall_start_point = projectedCloud->points.at(std::get<2>(distances_and_indices.front()));
+    pcl::PointXYZ wall_end_point;
+    for (size_t i = 1; i < distances_and_indices.size(); ++i)
+    {
+        const float sqr_distance = std::get<0>(distances_and_indices[i])-std::get<0>(distances_and_indices[i-1]);
+        if (sqr_distance < wall_neighbour_dist_)
+        {
+            current_wall_indices.push_back(std::get<1>(distances_and_indices[i]));
+            wall_end_point = projectedCloud->points.at(std::get<2>(distances_and_indices[i]));
+        } else
+        {
+            add_or_merge_wall(wall_indices, wall_poses, current_wall_indices, wall_start_point, wall_end_point);
             current_wall_indices.clear();
-            current_wall_indices.push_back(static_cast<int>(point.z));
-            start_point = point;
-            end_point = point;
+            current_wall_indices.push_back(std::get<1>(distances_and_indices[i]));
+            wall_start_point = projectedCloud->points.at(std::get<2>(distances_and_indices[i]));
+            wall_end_point = wall_start_point;
         }
     }
-
-    addOrMergeWall(wall_indices, wall_poses, current_wall_indices, start_point, end_point);
-
+    add_or_merge_wall(wall_indices, wall_poses, current_wall_indices, wall_start_point, wall_end_point);
     return wall_poses;
 }
 
-void pcl_detector::PclProcessor::addOrMergeWall(
+void PclProcessor::add_or_merge_wall(
     std::vector<int>& wall_indices, 
-    std::vector<pcl::PointXYZ>& wall_poses, 
+    std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>>& wall_poses, 
     const std::vector<int>& current_wall_indices,
-    const pcl::PointXYZ& start_point, 
-    const pcl::PointXYZ& end_point) {
-
+    const pcl::PointXYZ& wall_start_point, 
+    const pcl::PointXYZ& wall_end_point) {
+    // std::cout << "in add or merge wall" << std::endl;
     if ((current_wall_indices.size() > u_int16_t(wall_min_points_)) 
-        && std::hypot(start_point.x - end_point.x, start_point.y - end_point.y) > wall_min_length_){
+        && std::hypot(wall_start_point.x - wall_end_point.x, wall_start_point.y - wall_end_point.y) > wall_min_length_)
+    {
         wall_indices.insert(wall_indices.end(), current_wall_indices.begin(), current_wall_indices.end());
-        if (!wall_poses.empty() && std::hypot(start_point.x - wall_poses.back().x, start_point.y - wall_poses.back().y) < wall_merge_dist_) {
-            // Merge with previous wall
-            wall_poses.back() = end_point;
+        // Merge with previous wall if close enough
+        if (!wall_poses.empty() && std::hypot(wall_start_point.x - wall_poses.back().second.x, wall_start_point.y - wall_poses.back().second.y) < wall_merge_dist_) {
+            wall_poses.back().second = wall_end_point;
         } else {
             // Add as a new wall
-            wall_poses.push_back(start_point);
-            wall_poses.push_back(end_point);
+            wall_poses.push_back({wall_start_point, wall_end_point});
         }
     }
 }
 
-void pcl_detector::PclProcessor::getPointsBehindWalls(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::vector<pcl::PointXYZ>& wall_poses, std::vector<int>& indices_to_remove){
+void PclProcessor::get_points_behind_walls(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>>& wall_poses, std::vector<int>& indices_to_remove)
+{
+    struct WallPolygons{
+        int nvert;
+        float* vertx;
+        float* verty;
+    };
+
+    std::vector<WallPolygons> wall_polygons;
+    wall_polygons.reserve(wall_poses.size());
     
-    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> polygons;
-    polygons.reserve(wall_poses.size() / 2);
-    for(size_t i = 0; i < wall_poses.size(); i+=2){
-        pcl::PointCloud<pcl::PointXYZ>::Ptr polygon_cloud = createPolygon(wall_poses[i], wall_poses[i+1]);
-        polygons.push_back(polygon_cloud);
+    for(size_t i = 0; i < wall_poses.size(); i++)
+    {
+        auto [first_e_x,first_e_y] = create_extended_point(wall_poses[i].first);
+        auto [second_e_x,second_e_y] = create_extended_point(wall_poses[i].second);
+        wall_polygons.push_back({4, new float[4]{wall_poses[i].first.x, wall_poses[i].second.x, second_e_x, first_e_x},
+                                    new float[4]{wall_poses[i].first.y, wall_poses[i].second.y, second_e_y, first_e_y}});
     }
 
-    for (size_t i = 0; i < cloud->points.size(); ++i) {
+    for (size_t i = 0; i < cloud->points.size(); ++i)
+    {
         const auto& point = cloud->points[i];
-        for(size_t j = 0; j < polygons.size(); j++){
-            if (isXYPointIn2DXYPolygon(point, *polygons[j])) {
+        const auto& p_x = point.x;
+        const auto& p_y = point.y;
+        for(size_t j = 0; j < wall_polygons.size(); j++)
+        {
+            if (pnpoly(wall_polygons[j].nvert, wall_polygons[j].vertx, wall_polygons[j].verty, p_x, p_y))
+            {
                 indices_to_remove.push_back(i);
                 break;
             }
-        }
-    
-        
+        }   
     }
-
 }
 
-pcl::PointCloud<pcl::PointXYZ>::Ptr pcl_detector::PclProcessor::createPolygon(const pcl::PointXYZ& p1, const pcl::PointXYZ& p2) {
+std::pair<float,float> PclProcessor::create_extended_point(const pcl::PointXYZ& p)
+{
     // Calculate the magnitude of the vector from origin to point
         float length = 200.0;
         // Normalize the vector, then scale it to the new length
 
         pcl::PointXYZ p1_ext;
-        pcl::PointXYZ p2_ext;
-        float p1_magnitude = sqrt(p1.x * p1.x + p1.y * p1.y);
-        float p2_magnitude = sqrt(p2.x * p2.x + p2.y * p2.y);
-        p1_ext.x = (p1.x / p1_magnitude) * length;
-        p1_ext.y = (p1.y / p1_magnitude) * length;
-        p2_ext.x = (p2.x / p2_magnitude) * length;
-        p2_ext.y = (p2.y / p2_magnitude) * length;
-        p1_ext.z = p1.z;
-        p2_ext.z = p2.z;
+        float p_magnitude = sqrt(p.x * p.x + p.y * p.y);
+        float e_x = (p.x / p_magnitude) * length;
+        float e_y = (p.y / p_magnitude) * length;
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr polygon_cloud(new pcl::PointCloud<pcl::PointXYZ>());
-        polygon_cloud->points.push_back(p1);
-        polygon_cloud->points.push_back(p2);
-        polygon_cloud->points.push_back(p2_ext);
-        polygon_cloud->points.push_back(p1_ext);
-        return polygon_cloud;
+        return {e_x, e_y};
 }
 
-bool pcl_detector::PclProcessor::isXYPointIn2DXYPolygon (const pcl::PointXYZ& point, const pcl::PointCloud<pcl::PointXYZ> &polygon)
-{
-  bool in_poly = false;
-  double x1, x2, y1, y2;
-
-  const auto nr_poly_points = polygon.size ();
-  // start with the last point to make the check last point<->first point the first one
-  double xold = polygon[nr_poly_points - 1].x;
-  double yold = polygon[nr_poly_points - 1].y;
-  for (std::size_t i = 0; i < nr_poly_points; i++)
-  {
-    double xnew = polygon[i].x;
-    double ynew = polygon[i].y;
-    if (xnew > xold)
-    {
-      x1 = xold;
-      x2 = xnew;
-      y1 = yold;
-      y2 = ynew;
-    }
-    else
-    {
-      x1 = xnew;
-      x2 = xold;
-      y1 = ynew;
-      y2 = yold;
-    }
-
-    if ( (xnew < point.x) == (point.x <= xold) && (point.y - y1) * (x2 - x1) < (y2 - y1) * (point.x - x1) )
-    {
-      in_poly = !in_poly;
-    }
-    xold = xnew;
-    yold = ynew;
-  }
-
-  return (in_poly);
-}
-
-int pcl_detector::PclProcessor::pnpoly(int nvert, float *vertx, float *verty, float testx, float testy)
+int PclProcessor::pnpoly(int nvert, float *vertx, float *verty, float testx, float testy)
 {
   int i, j, c = 0;
   for (i = 0, j = nvert-1; i < nvert; j = i++) {
@@ -304,7 +277,73 @@ int pcl_detector::PclProcessor::pnpoly(int nvert, float *vertx, float *verty, fl
   return c;
 }
 
-void pcl_detector::PclProcessor::apply_landmask(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int nvert, float* vertx, float* verty)
+void PclProcessor::filter_lines(std::vector<LineData>& lines_data)
+{   
+    struct WallPolygons{
+        int nvert;
+        float* vertx;
+        float* verty;
+    };
+
+    std::vector<WallPolygons> wall_polygons;
+    
+    // Create polygons for walls on each line
+    for (const auto& lineData : lines_data)
+    {
+        for (const auto& wall : lineData.wall_poses)
+        {
+        auto [first_e_x,first_e_y] = create_extended_point(wall.first);
+        auto [second_e_x,second_e_y] = create_extended_point(wall.second);
+        wall_polygons.push_back({4, new float[4]{wall.first.x, wall.second.x, second_e_x, first_e_x},
+                                    new float[4]{wall.first.y, wall.second.y, second_e_y, first_e_y}});
+        }
+    }
+
+    // Check if the centre of walls are inside the polygons
+    size_t wall_number = 0;
+    for (size_t i = 0; i < lines_data.size(); ++i)
+    {
+        for (size_t j = 0; j < lines_data[i].wall_poses.size(); ++j)
+        {
+            float wall_center_x = (lines_data[i].wall_poses[j].first.x + lines_data[i].wall_poses[j].second.x) / 2;
+            float wall_center_y = (lines_data[i].wall_poses[j].first.y + lines_data[i].wall_poses[j].second.y) / 2;
+            
+            for (size_t k = 0; k < wall_polygons.size(); ++k)
+            {
+                if(k == wall_number) continue; // Skip the same wall (polygon)
+                if (pnpoly(wall_polygons[k].nvert, wall_polygons[k].vertx, wall_polygons[k].verty, wall_center_x, wall_center_y))
+                {
+                    lines_data[i].walls_active[j] = false;
+                    break;
+                }
+            }
+            wall_number++;
+        }
+    }
+    
+    for (auto& lineData : lines_data) {
+        std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>> active_wall_poses;
+        std::vector<pcl::PointXYZ> activeWallPoses; // To store poses of active walls
+
+        // Process each wall in the current line
+        for (size_t j = 0; j < lineData.wall_poses.size(); ++j) {
+            if (!lineData.walls_active[j]) continue; // Skip walls marked as inactive
+
+            // For active walls, add both start and end points to active_wall_poses
+            active_wall_poses.push_back(lineData.wall_poses[j]);
+        }
+
+        // Update the line's wall poses with only the active walls
+        lineData.wall_poses = std::move(active_wall_poses);
+    }
+
+    // Remove lines from lines_data that have no walls left
+    lines_data.erase(std::remove_if(lines_data.begin(), lines_data.end(), 
+                                   [](const LineData& ld) { return ld.wall_poses.empty(); }),
+                    lines_data.end());
+}
+
+void PclProcessor::apply_landmask(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int nvert, float* vertx, float* verty)
 {
     std::vector<int> indices_to_remove;
     for (size_t i = 0; i < cloud->points.size(); ++i) {
@@ -316,10 +355,10 @@ void pcl_detector::PclProcessor::apply_landmask(pcl::PointCloud<pcl::PointXYZ>::
     }
 
     // Function to remove points based on indices_to_remove
-    extractPoints(cloud, indices_to_remove);
+    extract_points(cloud, indices_to_remove);
 }
 
-void pcl_detector::PclProcessor::extractPoints(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, std::vector<int>& indices_to_remove)
+void PclProcessor::extract_points(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, std::vector<int>& indices_to_remove)
 {
     // Extract doesn't care about unique indices, but if the size of the indices_to_remove is greater than pcl size then it fails
     // Sort indices to remove duplicates
@@ -346,6 +385,5 @@ void pcl_detector::PclProcessor::extractPoints(pcl::PointCloud<pcl::PointXYZ>::P
     // clear to use the same vector later
     indices_to_remove.clear();
 }
-
 
 }; // namespace pcl_detector
