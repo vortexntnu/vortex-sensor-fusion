@@ -4,6 +4,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/surface/convex_hull.h>
 
 #include <pcl_detector/sample_consensus/msac.h>
 #include <pcl_detector/sample_consensus/sac_model_line_2d.hpp>
@@ -384,6 +385,14 @@ void PclProcessor::extract_points(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, std
 
     // clear to use the same vector later
     indices_to_remove.clear();
+}
+
+void PclProcessor::compute_convex_hull(const pcl::PointCloud<pcl::PointXYZ>& cluster, pcl::PointCloud<pcl::PointXYZ>::Ptr& hull)
+{
+    pcl::ConvexHull<pcl::PointXYZ> chull;
+    chull.setDimension(2);
+    chull.setInputCloud(cluster.makeShared());
+    chull.reconstruct(*hull);
 }
 
 }; // namespace pcl_detector

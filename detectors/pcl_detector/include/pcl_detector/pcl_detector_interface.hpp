@@ -18,6 +18,8 @@ public:
     virtual ~IPclDetector() = default;
 
     virtual pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) = 0;
+    virtual std::vector<pcl::PointCloud<pcl::PointXYZ>> get_clusters(const pcl::PointCloud<pcl::PointXYZ>& points) = 0;
+    virtual pcl::PointCloud<pcl::PointXYZ> get_centroids(const std::vector<pcl::PointCloud<pcl::PointXYZ>>& clusters) = 0;
 };
 
 }; // namespace pcl_detector

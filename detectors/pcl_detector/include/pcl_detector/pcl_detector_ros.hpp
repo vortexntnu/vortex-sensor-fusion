@@ -24,6 +24,7 @@
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <geometry_msgs/msg/polygon_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include <vortex_msgs/msg/clusters.hpp>
 
 #include <visualization_msgs/msg/marker_array.hpp>
 
@@ -97,10 +98,14 @@ class PclDetectorNode : public rclcpp::Node
     std::string param_topic_pointcloud_in_;
     
     // ROS2 publisher and related topic name 
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr centroid_publisher_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr poly_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pre_wall_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr after_wall_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr cluster_publisher_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr convex_hull_publisher_;
+    rclcpp::Publisher<vortex_msgs::msg::Clusters>::SharedPtr vortex_cluster_publisher_;
+
 
 
     std::string param_topic_pointcloud_out_;

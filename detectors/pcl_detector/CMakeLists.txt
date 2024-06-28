@@ -28,6 +28,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(vortex_msgs REQUIRED)
 find_package(PCL 1.12 REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(Eigen3 REQUIRED)
@@ -104,6 +105,7 @@ ament_target_dependencies(${PROJECT_NAME}_node
   pcl_conversions
   visualization_msgs
   geometry_msgs
+  vortex_msgs
   tf2_ros
   tf2_geometry_msgs
   nav_msgs

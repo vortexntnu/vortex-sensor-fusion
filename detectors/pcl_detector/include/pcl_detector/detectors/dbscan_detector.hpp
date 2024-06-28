@@ -27,6 +27,8 @@ public:
     }
 
     pcl::PointCloud<pcl::PointXYZ> get_detections(const pcl::PointCloud<pcl::PointXYZ>& points) override;
+    std::vector<pcl::PointCloud<pcl::PointXYZ>> get_clusters(const pcl::PointCloud<pcl::PointXYZ>& points) override;
+    pcl::PointCloud<pcl::PointXYZ> get_centroids(const std::vector<pcl::PointCloud<pcl::PointXYZ>>& clusters) override;
 
 private:
     float eps_;

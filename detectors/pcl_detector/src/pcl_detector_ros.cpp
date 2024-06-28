@@ -59,10 +59,13 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   qos_profile_transient_local.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
   auto qos_transient_local = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_transient_local.history, 1), qos_profile_transient_local);
   
-  publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(param_topic_pointcloud_out_, qos);
+  centroid_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(param_topic_pointcloud_out_, qos);
   poly_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/land_poly", qos);
   pre_wall_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/pre_wall", qos);
   after_wall_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/after_wall", qos);
+  cluster_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/clusters", qos);
+  convex_hull_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/concave_hulls", qos);
+  vortex_cluster_publisher_ = this->create_publisher<vortex_msgs::msg::Clusters>("vortex/clusters", qos);
   subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
   param_topic_pointcloud_in_, qos, std::bind(&PclDetectorNode::topic_callback, this, _1));
   pose_array_publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("wall_poses", qos);
@@ -364,38 +367,63 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
         RCLCPP_DEBUG_STREAM(this->get_logger(), "Number of points after detecting lines: " << cloud->size());
         // RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Filtered PointCloud to " << cloud->size() << " points");
     }
-
-    // Finds clusters with the configured detector
-    pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cloud);
-
-    if (detections.size() == 0) {
-        RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
-    }
-    RCLCPP_DEBUG_STREAM(this->get_logger(), "Number of clusters detected: " << detections.size());
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-
-    std::chrono::duration<double> duration = end_time - start_time;
-    RCLCPP_DEBUG_STREAM(this->get_logger(), "Processing time for topic_callback: " << duration.count() << " seconds");
-    // Converts the clusters-PointCloud to an appropriate msg for publishing
-
+    
     sensor_msgs::msg::PointCloud2 downsampled_cloud_msg;
     pcl::toROSMsg(*cloud, downsampled_cloud_msg);
     downsampled_cloud_msg.header = cloud_msg->header;
 
     after_wall_pub_->publish(downsampled_cloud_msg);
 
+    // Finds clusters with the configured detector
+    // pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cloud);
+    std::vector<pcl::PointCloud<pcl::PointXYZ>> clusters = detector_->get_clusters(*cloud);
+    pcl::PointCloud<pcl::PointXYZ> centroids = detector_->get_centroids(clusters);
+
+    if (centroids.size() == 0) {
+        RCLCPP_WARN_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "No clusters detected!");
+    }
+    RCLCPP_DEBUG_STREAM(this->get_logger(), "Number of clusters detected: " << centroids.size());
+
+    // Converts the clusters-PointCloud to an appropriate msg for publishing
+    pcl::PointCloud<pcl::PointXYZ> cluster_pcl;
+    sensor_msgs::msg::PointCloud2 cluster_pcl_msg;
+    for (const auto& cluster : clusters) {
+        cluster_pcl.points.insert(cluster_pcl.points.end(), cluster.points.begin(), cluster.points.end());
+    }
+    pcl::toROSMsg(cluster_pcl, cluster_pcl_msg);
+    cluster_pcl_msg.header = cloud_msg->header;
+    cluster_publisher_->publish(cluster_pcl_msg);
+
     // Converts the clusters-PointCloud to an appropriate msg for publishing
     sensor_msgs::msg::PointCloud2 centroids_cloud_msg;
-    pcl::toROSMsg(detections, centroids_cloud_msg);
+    pcl::toROSMsg(centroids, centroids_cloud_msg);
     centroids_cloud_msg.header = cloud_msg->header;
 
-    publisher_->publish(centroids_cloud_msg);
+    centroid_publisher_->publish(centroids_cloud_msg);
 
-     // End time measurement
-    // auto end_time = std::chrono::high_resolution_clock::now();
-    // std::chrono::duration<double> duration = end_time - start_time;
-    // RCLCPP_INFO(this->get_logger(), "Processing time for topic_callback: %f seconds", duration.count());
+    vortex_msgs::msg::Clusters vortex_clusters;
+    pcl::PointCloud<pcl::PointXYZ> concave_hull_pcl;
+    vortex_clusters.centroids=centroids_cloud_msg;
+    for ( auto& cluster : clusters)
+    {
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cluster_convex_hull (new pcl::PointCloud<pcl::PointXYZ>);
+        processor_->compute_convex_hull(cluster, cluster_convex_hull);
+        sensor_msgs::msg::PointCloud2 convex_hull_msg;
+         pcl::toROSMsg(*cluster_convex_hull, convex_hull_msg);
+        //  RCLCPP_DEBUG_STREAM(this->get_logger(), "Point diff between concave hull and cluster: " << cluster.size() - cluster_convex_hull->size());
+        vortex_clusters.clusters.push_back(convex_hull_msg);
+        concave_hull_pcl.points.insert(concave_hull_pcl.points.end(), cluster_convex_hull->points.begin(), cluster_convex_hull->points.end());
+    }
+    sensor_msgs::msg::PointCloud2 convex_hull_msg;
+    pcl::toROSMsg(concave_hull_pcl, convex_hull_msg);
+    convex_hull_msg.header = cloud_msg->header;
+    convex_hull_publisher_->publish(convex_hull_msg);
+
+    vortex_cluster_publisher_->publish(vortex_clusters);
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    std::chrono::duration<double> duration = end_time - start_time;
+    RCLCPP_DEBUG_STREAM(this->get_logger(), "Processing time for topic_callback: " << duration.count() << " seconds");
 }
 
 void PclDetectorNode::transform_lines(const std_msgs::msg::Header& cloud_header, std::vector<Eigen::VectorXf>& prev_lines)

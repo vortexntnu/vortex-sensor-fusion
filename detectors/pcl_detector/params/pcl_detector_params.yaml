@@ -11,7 +11,7 @@ pcl_detector_node:
       wall_min_length: 5.0  # Minimum length of wall
       wall_merge_dist: 5.0 # Maximum distance between walls on same line to merge
     
-    apply_landmask: false
+    apply_landmask: true
     apply_voxelgrid: true
     detect_lines: true
     transform_lines: false
@@ -24,7 +24,7 @@ pcl_detector_node:
     detector: "dbscan" # one of "dbscan", "euclidean"
     
     dbscan:
-      epsilon: 2.0
+      epsilon: 1.0
       min_points: 20
 
     euclidean:

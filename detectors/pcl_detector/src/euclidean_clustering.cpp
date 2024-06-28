@@ -43,4 +43,42 @@ pcl::PointCloud<pcl::PointXYZ> EuclideanClusteringDetector::get_detections(const
     return detections;
 }
 
+std::vector<pcl::PointCloud<pcl::PointXYZ>> EuclideanClusteringDetector::get_clusters(const pcl::PointCloud<pcl::PointXYZ>& points)
+{
+    pcl::PointCloud<pcl::PointXYZ> detections;
+
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+    tree->setInputCloud(points.makeShared());
+
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+    ec.setClusterTolerance(cluster_tolerance_);
+    ec.setMinClusterSize(min_cluster_size_);
+    ec.setMaxClusterSize(std::numeric_limits<int>::max());
+    ec.setSearchMethod(tree);
+    ec.setInputCloud(points.makeShared());
+    ec.extract(cluster_indices);
+
+    std::vector<pcl::PointCloud<pcl::PointXYZ>> clusters;
+    for (const auto& indices : cluster_indices) {
+        pcl::PointCloud<pcl::PointXYZ> cluster;
+        for (const auto& index : indices.indices) {
+            cluster.push_back(points[index]);
+        }
+        clusters.push_back(cluster);
+    }
+
+    return clusters;
+}
+
+pcl::PointCloud<pcl::PointXYZ> EuclideanClusteringDetector::get_centroids(const std::vector<pcl::PointCloud<pcl::PointXYZ>>& clusters){
+    pcl::PointCloud<pcl::PointXYZ> centroids;
+    for (const auto& cluster : clusters) {
+        pcl::PointXYZ centroid;
+        pcl::computeCentroid(cluster, centroid);
+        centroids.push_back(centroid);
+    }
+    return centroids;
+}
+
 }; // namespace pcl_detector
