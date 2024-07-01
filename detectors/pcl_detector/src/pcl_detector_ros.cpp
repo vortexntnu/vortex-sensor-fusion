@@ -24,7 +24,6 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   declare_parameter<float>("euclidean.cluster_tolerance", 1.0);
   declare_parameter<int>("euclidean.min_points", 25);
 
-
   declare_parameter<float>("processor.voxel_leaf_size", 0.1);
   declare_parameter<float>("processor.model_thresh", 0.5);
   declare_parameter<int>("processor.model_iterations", 10);
@@ -33,9 +32,7 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   declare_parameter<float>("processor.wall_neighbour_dist", 0.5);
   declare_parameter<int>("processor.wall_min_points", 50);
   declare_parameter<float>("processor.wall_min_length", 3.0);
-  declare_parameter<float>("processor.wall_merge_dist", 10.0);
 
-  
   declare_parameter<bool>("apply_landmask", false);
   declare_parameter<bool>("apply_voxelgrid", false);
   declare_parameter<bool>("detect_lines", false);
@@ -93,10 +90,8 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   float wall_neighbour_dist = this->get_parameter("processor.wall_neighbour_dist").as_double();
   int wall_min_points = this->get_parameter("processor.wall_min_points").as_int();
   float wall_min_length = this->get_parameter("processor.wall_min_length").as_double();
-  float wall_merge_dist = this->get_parameter("processor.wall_merge_dist").as_double();
 
-
-  processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, prev_line_thresh, project_thresh, wall_neighbour_dist, wall_min_points, wall_min_length, wall_merge_dist);
+  processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, prev_line_thresh, project_thresh, wall_neighbour_dist, wall_min_points, wall_min_length);
 
   // Initialize transform listener
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
@@ -207,17 +202,16 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
         float wall_neighbour_dist = this->get_parameter("processor.wall_neighbour_dist").as_double();
         int wall_min_points = this->get_parameter("processor.wall_min_points").as_int();
         float wall_min_length = this->get_parameter("processor.wall_min_length").as_double();
-        float wall_merge_dist = this->get_parameter("processor.wall_merge_dist").as_double();
 
         processor_ = std::make_unique<PclProcessor>(voxel_leaf_size, model_thresh, model_iterations, 
-        prev_line_thresh, project_thresh, wall_neighbour_dist, wall_min_points, wall_min_length, wall_merge_dist);
+        prev_line_thresh, project_thresh, wall_neighbour_dist, wall_min_points, wall_min_length);
     }
 
     processor_->remove_zero_points(cloud);
     RCLCPP_DEBUG_STREAM(this->get_logger(), "Number of points after removing zero points: " << cloud->size());
     
     // Used to remove ground points from testing on land
-    processor_->applyPassThrough(cloud, "z", -0.65, 100.0);
+    processor_->applyPassThrough(cloud, "z", -0.6, 100.0);
 
     if(this->get_parameter("apply_landmask").as_bool() && land_mask_set_)
     {
@@ -294,42 +288,49 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
 
             std::vector<LineData> lines_data;
         
-            for (const auto& line : prev_lines_)
+            for (const auto& coefficients : prev_lines_)
             {
                 // RCLCPP_INFO_STREAM(this->get_logger(), "previous lines: " << prev_lines_.size());
                 // RCLCPP_INFO_STREAM(this->get_logger(), "Line: " << line);
-                auto inliers = processor_->get_inliers(line, cloud);
+                auto inliers = processor_->get_inliers(coefficients, cloud);
                 // RCLCPP_INFO_STREAM(this->get_logger(), "Inliers of prev line: " << inliers.size());
                 if(inliers.size() > u_int16_t(min_inliers)){
-                    auto [optimized_coefficients, wall_poses] = processor_->get_walls(line, wall_indices_, inliers, cloud);
+                    auto [optimized_coefficients, wall_poses, wall_indices] = processor_->get_walls(coefficients, inliers, cloud);
                     // Check if there are any walls detected on the line
                     if(wall_poses.size() < 1){
                         continue;
                     }  
-                    LineData line_data{optimized_coefficients, wall_poses, std::vector<bool>(wall_poses.size(), true)};
+                    LineData line_data{optimized_coefficients, wall_poses, wall_indices, std::vector<bool>(wall_poses.size(), true)};
                     lines_data.push_back(line_data);
                 }
             }
             // Filter lines to remove walls that are behind other walls and remove lines with no remaining walls after filter
             processor_->filter_lines(lines_data);
-            std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>> walls_poses;
+            std::vector<WallPose> filtered_wall_poses;
+            std::vector<int> filtered_wall_indices;
 
             for (const auto& data : lines_data) {
-                walls_poses.insert(walls_poses.end(), data.wall_poses.begin(), data.wall_poses.end());
+                for (size_t i = 0; i < data.wall_poses.size(); i++)
+                {
+                    if (data.walls_active[i])
+                    {
+                        filtered_wall_poses.push_back(data.wall_poses[i]);
+                        filtered_wall_indices.insert(filtered_wall_indices.end(), data.wall_indices[i].begin(), data.wall_indices[i].end());
+                    }
+                }
                 current_lines_.push_back(data.coefficients);
             }
             RCLCPP_DEBUG_STREAM(this->get_logger(), "Number of current lines: " << current_lines_.size());
 
-            add_ros_wall_poses(walls_poses);
-            processor_->get_points_behind_walls(cloud, walls_poses, wall_indices_);
-            processor_->extract_points(cloud, wall_indices_);
-        
+            add_ros_wall_poses(filtered_wall_poses);
+            processor_->get_points_behind_walls(cloud, filtered_wall_poses, filtered_wall_indices);
+            processor_->extract_points(cloud, filtered_wall_indices);
         }
-        
 
         // Find new lines
         
-        std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>> new_walls_poses;
+        std::vector<WallPose> new_walls_poses;
+        std::vector<int> new_wall_indices;
         // Set how many new lines to find for each callback
         int new_lines = this->get_parameter("new_lines").as_int();
         for (int i = 0; i < new_lines; i++) {
@@ -339,30 +340,33 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
             }
             auto [coefficients, inliers] = processor_->find_line_with_MSAC(cloud);
 
-            auto [optimized_coefficients, wall_poses] = processor_->get_walls(coefficients, wall_indices_, inliers, cloud);
+            auto [optimized_coefficients, wall_poses, wall_indices] = processor_->get_walls(coefficients, inliers, cloud);
 
-            if (wall_poses.size() > 0) {
+            if (wall_poses.size() > 0)
+            {
                 current_lines_.push_back(optimized_coefficients);
-                new_walls_poses.insert(new_walls_poses.end(), wall_poses.begin(), wall_poses.end());
+                for (size_t i = 0; i < wall_poses.size(); i++)
+                {
+                    new_walls_poses.push_back(wall_poses[i]);
+                    new_wall_indices.insert(new_wall_indices.end(), wall_indices[i].begin(), wall_indices[i].end());
+                }
+
+            add_ros_wall_poses(new_walls_poses);
+            processor_->get_points_behind_walls(cloud, new_walls_poses, new_wall_indices);
+            processor_->extract_points(cloud, new_wall_indices);
             }
 
         }
-        if (new_walls_poses.size() > 0) {
-            add_ros_wall_poses(new_walls_poses);
-            processor_->get_points_behind_walls(cloud, new_walls_poses, wall_indices_);
-            processor_->extract_points(cloud, wall_indices_);
-        }
-
-        wall_poses_.header = cloud_msg->header;
-        pose_array_publisher_->publish(wall_poses_);
+        ros_wall_poses_.header = cloud_msg->header;
+        pose_array_publisher_->publish(ros_wall_poses_);
 
         publish_line_marker_array(current_lines_, cloud_msg->header.frame_id);
-        publish_wall_marker_array(wall_poses_, cloud_msg->header.frame_id);
-        publish_extended_lines_from_origin(wall_poses_, cloud_msg->header.frame_id);
+        publish_wall_marker_array(ros_wall_poses_, cloud_msg->header.frame_id);
+        publish_extended_lines_from_origin(ros_wall_poses_, cloud_msg->header.frame_id);
 
         prev_lines_ = current_lines_;
         current_lines_.clear();
-        wall_poses_.poses.clear();
+        ros_wall_poses_.poses.clear();
 
         RCLCPP_DEBUG_STREAM(this->get_logger(), "Number of points after detecting lines: " << cloud->size());
         // RCLCPP_INFO_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "Filtered PointCloud to " << cloud->size() << " points");
@@ -511,8 +515,8 @@ void PclDetectorNode::add_ros_wall_poses(const std::vector<std::pair<pcl::PointX
         pose_2.orientation.z = 0.0;
         pose_2.orientation.w = 1.0;
         
-        wall_poses_.poses.push_back(pose_1);
-        wall_poses_.poses.push_back(pose_2);
+        ros_wall_poses_.poses.push_back(pose_1);
+        ros_wall_poses_.poses.push_back(pose_2);
     }
 }
 

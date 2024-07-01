@@ -131,8 +131,7 @@ class PclDetectorNode : public rclcpp::Node
     geometry_msgs::msg::PolygonStamped land_mask_;
     std::vector<Eigen::VectorXf> current_lines_;
     std::vector<Eigen::VectorXf> prev_lines_;
-    geometry_msgs::msg::PoseArray wall_poses_;
-    std::vector<int> wall_indices_;
+    geometry_msgs::msg::PoseArray ros_wall_poses_;
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },
