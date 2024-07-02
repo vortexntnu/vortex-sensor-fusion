@@ -1,6 +1,6 @@
 target_tracking_node:
   ros__parameters:
-    topic_pointcloud_in: "lidar/centroids"
+    topic_pointcloud_in: "pcl/clusters"
     topic_landmarks_out: "target_tracking/landmarks"
     topic_visualization_parameters: "target_tracking/parameters"
     clutter_rate: 0.001

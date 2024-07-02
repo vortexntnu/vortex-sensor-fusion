@@ -11,6 +11,7 @@
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <vortex_msgs/msg/landmark.hpp>
 #include <vortex_msgs/msg/landmark_array.hpp>
+#include <vortex_msgs/msg/clusters.hpp>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2_ros/buffer.h>
@@ -37,9 +38,9 @@ private:
     /**
      * @brief Callback function for the topic subscription.
      * 
-     * @param centroids The received point cloud data.
+     * @param clusters The received point cloud data.
      */
-    void topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr centroids);
+    void topic_callback(const vortex_msgs::msg::Clusters::SharedPtr clusters);
 
     /**
      * @brief Timer callback function.
@@ -97,11 +98,15 @@ private:
     // List of 2D centroids
     mutable std::vector<Eigen::Vector2d> measurements_;
 
+    std::vector<float> centroid_z_meas_;
+
+    std::vector<std::vector<Eigen::Vector3f>> clusters_;
+
     // Track manager
     TrackManager track_manager_;
 
     // Pointcloud subscriber
-    rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscriber_;
+    rclcpp::Subscription<vortex_msgs::msg::Clusters>::SharedPtr subscriber_;
     std::string param_topic_pointcloud_in_;
     
     // Landmark publisher

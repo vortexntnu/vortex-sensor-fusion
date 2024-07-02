@@ -408,6 +408,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     vortex_msgs::msg::Clusters vortex_clusters;
     pcl::PointCloud<pcl::PointXYZ> concave_hull_pcl;
     vortex_clusters.centroids=centroids_cloud_msg;
+    vortex_clusters.header = cloud_msg->header;
     for ( auto& cluster : clusters)
     {
         pcl::PointCloud<pcl::PointXYZ>::Ptr cluster_convex_hull (new pcl::PointCloud<pcl::PointXYZ>);

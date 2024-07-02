@@ -42,7 +42,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 1), qos_profile);
 
     // Subscribe to topic
-    subscriber_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+    subscriber_ = this->create_subscription<vortex_msgs::msg::Clusters>(
         param_topic_pointcloud_in_, qos, std::bind(&TargetTrackingNode::topic_callback, this, _1));
 
     // Publish landmarks
@@ -68,7 +68,7 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     track_manager_.set_sensor_model(std_sensor);
 }
 
-void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::SharedPtr centroids)
+void TargetTrackingNode::topic_callback(const vortex_msgs::msg::Clusters::SharedPtr clusters)
 {
     // Transform the point cloud to the world frame
     try {
@@ -77,23 +77,27 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
 
         // Lookup the transformation
         geometry_msgs::msg::TransformStamped transform_stamped = 
-        tf_buffer_->lookupTransform(world_frame, centroids->header.frame_id, centroids->header.stamp, rclcpp::Duration(1, 0));
+        tf_buffer_->lookupTransform(world_frame, clusters->header.frame_id, clusters->header.stamp, rclcpp::Duration(1, 0));
 
         // Clear measurements
         measurements_.clear();
+        centroid_z_meas_.clear();
+        clusters_.clear();
 
         // Transform PointCloud to vector of 2d points
-        sensor_msgs::PointCloud2ConstIterator<float> iter_x(*centroids, "x");
-        sensor_msgs::PointCloud2ConstIterator<float> iter_y(*centroids, "y");
+        sensor_msgs::PointCloud2ConstIterator<float> iter_x(clusters->centroids, "x");
+        sensor_msgs::PointCloud2ConstIterator<float> iter_y(clusters->centroids, "y");
+        sensor_msgs::PointCloud2ConstIterator<float> iter_z(clusters->centroids, "z");
+        size_t i = 0;
 
-        for (; iter_x != iter_x.end(); ++iter_x, ++iter_y)
+        for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z)
         {
             geometry_msgs::msg::PointStamped transformed_point;
             geometry_msgs::msg::PointStamped centroid_point;
-            centroid_point.header = centroids->header;
+            centroid_point.header = clusters->header;
             centroid_point.point.x = *iter_x;
             centroid_point.point.y = *iter_y;
-            centroid_point.point.z = 0.0;
+            centroid_point.point.z = *iter_z;
             tf2::doTransform(centroid_point, transformed_point, transform_stamped);
 
             Eigen::Vector2d point_2d;
@@ -101,6 +105,29 @@ void TargetTrackingNode::topic_callback(const sensor_msgs::msg::PointCloud2::Sha
             point_2d[1] = transformed_point.point.y;
 
             measurements_.push_back(point_2d);
+            centroid_z_meas_.push_back(transformed_point.point.z);
+        }
+
+        for (const auto& cluster : clusters->clusters)
+        {
+            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::fromROSMsg(cluster, *cloud);
+            std::vector<Eigen::Vector3f> cluster_points;
+            for (const auto& point : cloud->points)
+            {
+                geometry_msgs::msg::Point cluster_point;
+                geometry_msgs::msg::Point transformed_point;
+                cluster_point.x = point.x;
+                cluster_point.y = point.y;
+                cluster_point.z = point.z;
+                tf2::doTransform(cluster_point, transformed_point, transform_stamped);
+                Eigen::Vector3f point_3d;
+                point_3d[0] = transformed_point.x;
+                point_3d[1] = transformed_point.y;
+                point_3d[2] = transformed_point.z;
+                cluster_points.push_back(point_3d);
+            }
+            clusters_.push_back(cluster_points);
         }
     } catch (tf2::TransformException &ex) {
         RCLCPP_WARN(this->get_logger(), "Could not transform point cloud: %s", ex.what());
@@ -146,7 +173,7 @@ void TargetTrackingNode::timer_callback()
     double deletion_threshold = get_parameter("deletion_threshold").as_double();
 
     // Update tracks
-    track_manager_.updateTracks(measurements_, update_interval, confirmation_threshold, gate_threshold, min_gate_threshold, max_gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity);
+    track_manager_.updateTracks(measurements_, centroid_z_meas_, clusters_, update_interval, confirmation_threshold, gate_threshold, min_gate_threshold, max_gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity);
 
     measurements_.clear();
 
@@ -175,7 +202,7 @@ void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
         vortex_msgs::msg::Landmark landmark;
 
         // Sets landmark type
-        landmark.landmark_type = "boat";
+        landmark.landmark_type = 0;
 
         // creates landmark message
         landmark.id = track.id;

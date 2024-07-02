@@ -10,12 +10,16 @@ using State2d = vortex::prob::Gauss<2>;
 using DynMod = vortex::models::ConstantVelocity;
 using SensorMod = vortex::models::IdentitySensorModel<4, 2>;
 using IPDA = vortex::filter::IPDA<DynMod, SensorMod>;
+using MeasurementTuple = std::tuple<Eigen::Vector2d, float, std::vector<Eigen::Vector3f>>;
+
 
 struct Track {
     int id;
     State4d state;
     double existence_probability;
     bool confirmed;
+    float centroid_z_measurement;
+    std::vector<Eigen::Vector3f> cluster;
 
     // For sorting tracks based on existence probability and confirmed track
     bool operator<(const Track &other) const {
@@ -51,7 +55,7 @@ public:
      * @param prob_of_survival The probability of survival.
      * @param clutter_intensity The intensity of clutter.
      */
-    void updateTracks(std::vector<Eigen::Vector2d> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double min_gate_threshold, double max_gate_threshold, double prob_of_detection, double prob_of_survival, double clutter_intensity);
+    void updateTracks(std::vector<Eigen::Vector2d> measurements_, std::vector<float> centroid_z_meas_, std::vector<std::vector<Eigen::Vector3f>> clusters_, int update_interval, double confirmation_threshold, double gate_theshhold, double min_gate_threshold, double max_gate_threshold, double prob_of_detection, double prob_of_survival, double clutter_intensity);
 
     /**
      * @brief Creates new tracks for every measurements.

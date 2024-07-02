@@ -5,7 +5,9 @@ TrackManager::TrackManager()
 {
 }
 
-void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements, 
+void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements,
+    std::vector<float> centroid_z_meas_,
+    std::vector<std::vector<Eigen::Vector3f>> clusters_,
     int update_interval, 
     double confirmation_threshold, 
     double gate_theshhold, 
