@@ -20,11 +20,12 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     declare_parameter<double>("max_gate_threshold", 10.0);
     declare_parameter<double>("confirmation_threshold", 0.9);
     declare_parameter<double>("deletion_threshold", 0.1);
+    declare_parameter<double>("initial_existence_probability", 0.4);
     declare_parameter<double>("std_velocity", 0.2);
     declare_parameter<double>("std_sensor", 0.5);
 
     declare_parameter<int>("update_interval_ms", 500);
-    declare_parameter<std::string>("world_frame", "world_frame");
+    declare_parameter<std::string>("fixed_frame", "world_frame");
     declare_parameter<bool>("publish_visualization", true);
 
     // Set parameter callback
@@ -70,44 +71,22 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
 
 void TargetTrackingNode::topic_callback(const vortex_msgs::msg::Clusters::SharedPtr clusters)
 {
-    // Transform the point cloud to the world frame
+    // Transform the point cloud to the fixed frame
+    RCLCPP_INFO(this->get_logger(), "Received %lu clusters", clusters->clusters.size());
     try {
-        // Get world_frame parameter
-        std::string world_frame = get_parameter("world_frame").as_string();
+        // Get fixed_frame parameter
+        std::string fixed_frame = get_parameter("fixed_frame").as_string();
 
         // Lookup the transformation
         geometry_msgs::msg::TransformStamped transform_stamped = 
-        tf_buffer_->lookupTransform(world_frame, clusters->header.frame_id, clusters->header.stamp, rclcpp::Duration(1, 0));
+        tf_buffer_->lookupTransform(fixed_frame, clusters->header.frame_id, clusters->header.stamp, rclcpp::Duration(1, 0));
 
         // Clear measurements
-        measurements_.clear();
         centroid_z_meas_.clear();
         clusters_.clear();
-
-        // Transform PointCloud to vector of 2d points
-        sensor_msgs::PointCloud2ConstIterator<float> iter_x(clusters->centroids, "x");
-        sensor_msgs::PointCloud2ConstIterator<float> iter_y(clusters->centroids, "y");
-        sensor_msgs::PointCloud2ConstIterator<float> iter_z(clusters->centroids, "z");
-        size_t i = 0;
-
-        for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z)
-        {
-            geometry_msgs::msg::PointStamped transformed_point;
-            geometry_msgs::msg::PointStamped centroid_point;
-            centroid_point.header = clusters->header;
-            centroid_point.point.x = *iter_x;
-            centroid_point.point.y = *iter_y;
-            centroid_point.point.z = *iter_z;
-            tf2::doTransform(centroid_point, transformed_point, transform_stamped);
-
-            Eigen::Vector2d point_2d;
-            point_2d[0] = transformed_point.point.x;
-            point_2d[1] = transformed_point.point.y;
-
-            measurements_.push_back(point_2d);
-            centroid_z_meas_.push_back(transformed_point.point.z);
-        }
-
+        measurements_= Eigen::Array<double, 2, Eigen::Dynamic>(2, 0);
+        Eigen::Index size = 0;
+        
         for (const auto& cluster : clusters->clusters)
         {
             pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
@@ -127,7 +106,34 @@ void TargetTrackingNode::topic_callback(const vortex_msgs::msg::Clusters::Shared
                 point_3d[2] = transformed_point.z;
                 cluster_points.push_back(point_3d);
             }
+            size++;
             clusters_.push_back(cluster_points);
+        }
+        measurements_.resize(2, size);
+
+        // Transform PointCloud to vector of 2d points
+        sensor_msgs::PointCloud2ConstIterator<float> iter_x(clusters->centroids, "x");
+        sensor_msgs::PointCloud2ConstIterator<float> iter_y(clusters->centroids, "y");
+        sensor_msgs::PointCloud2ConstIterator<float> iter_z(clusters->centroids, "z");
+        Eigen::Index i = 0;
+
+        for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z)
+        {
+            geometry_msgs::msg::PointStamped transformed_point;
+            geometry_msgs::msg::PointStamped centroid_point;
+            centroid_point.header = clusters->header;
+            centroid_point.point.x = *iter_x;
+            centroid_point.point.y = *iter_y;
+            centroid_point.point.z = *iter_z;
+            tf2::doTransform(centroid_point, transformed_point, transform_stamped);
+
+            Eigen::Vector2d point_2d;
+            point_2d[0] = transformed_point.point.x;
+            point_2d[1] = transformed_point.point.y;
+
+            measurements_.col(i) = point_2d;
+            centroid_z_meas_.push_back(transformed_point.point.z);
+            i++;
         }
     } catch (tf2::TransformException &ex) {
         RCLCPP_WARN(this->get_logger(), "Could not transform point cloud: %s", ex.what());
@@ -171,11 +177,15 @@ void TargetTrackingNode::timer_callback()
     double prob_of_survival = get_parameter("probability_of_survival").as_double();
     double clutter_intensity = get_parameter("clutter_rate").as_double();
     double deletion_threshold = get_parameter("deletion_threshold").as_double();
+    double initial_existence_probability = get_parameter("initial_existence_probability").as_double();
+
 
     // Update tracks
-    track_manager_.updateTracks(measurements_, centroid_z_meas_, clusters_, update_interval, confirmation_threshold, gate_threshold, min_gate_threshold, max_gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity);
+    track_manager_.updateTracks(measurements_, centroid_z_meas_, clusters_, update_interval, confirmation_threshold, gate_threshold, min_gate_threshold, max_gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity, initial_existence_probability);
 
-    measurements_.clear();
+    measurements_.resize(2, 0);
+    centroid_z_meas_.clear();
+    clusters_.clear();
 
     // Publish tracks to landmark server
     publish_landmarks(deletion_threshold);
@@ -192,27 +202,32 @@ void TargetTrackingNode::timer_callback()
 
 void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
     vortex_msgs::msg::LandmarkArray landmark_array;
+    RCLCPP_INFO(this->get_logger(), "Number of tracks: %lu", track_manager_.getTracks().size());
     for(const auto& track : track_manager_.getTracks())
     {   
+        RCLCPP_INFO(this->get_logger(), "Track existence probability: %f", track.existence_probability);
         // Skips unconfirmed tracks
         if(track.confirmed == false){
             continue;
         }
-
+        RCLCPP_INFO(this->get_logger(), "Track id: %d", track.id);
         vortex_msgs::msg::Landmark landmark;
 
         // Sets landmark type
-        landmark.landmark_type = 0;
+        landmark.landmark_type = vortex_msgs::msg::Landmark::NONE;
+
+        // Sets landmark classification
+        landmark.classification = vortex_msgs::msg::Landmark::UNKNOWN;
 
         // creates landmark message
         landmark.id = track.id;
-        landmark.action = track.existence_probability < deletion_threshold ? 0 : 1;
-        landmark.odom.header.frame_id = get_parameter("world_frame").as_string();
+        landmark.action = track.existence_probability < deletion_threshold ? 0 : track.action;
+        landmark.odom.header.frame_id = get_parameter("fixed_frame").as_string();
         landmark.odom.header.stamp = this->get_clock()->now();
 
         landmark.odom.pose.pose.position.x = track.state.mean()(0);
         landmark.odom.pose.pose.position.y = track.state.mean()(1);
-        landmark.odom.pose.pose.position.z = 0.0;
+        landmark.odom.pose.pose.position.z = track.centroid_z_measurement;
 
         landmark.odom.pose.covariance = {track.state.cov()(0,0), track.state.cov()(0,1), 0.0, 0.0, 0.0, 0.0,
                                          track.state.cov()(1,0), track.state.cov()(1,1), 0.0, 0.0, 0.0, 0.0,
@@ -247,7 +262,20 @@ void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
                                          0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
                                          0.0, 0.0, 0.0, 0.0, 0.0, 1.0};
 
-        landmark.odom.child_frame_id = get_parameter("world_frame").as_string();
+        landmark.odom.child_frame_id = get_parameter("fixed_frame").as_string();
+
+        shape_msgs::msg::SolidPrimitive cluster_polygon;
+        cluster_polygon.type = shape_msgs::msg::SolidPrimitive::PRISM;
+        cluster_polygon.polygon.points.resize(track.cluster.size());
+        for (size_t i = 0; i < track.cluster.size(); ++i)
+        {
+            cluster_polygon.polygon.points[i].x = track.cluster[i](0);
+            cluster_polygon.polygon.points[i].y = track.cluster[i](1);
+            cluster_polygon.polygon.points[i].z = track.cluster[i](2);
+        }
+        landmark.shape = cluster_polygon;
+
+
         landmark_array.landmarks.push_back(landmark);
     }
 

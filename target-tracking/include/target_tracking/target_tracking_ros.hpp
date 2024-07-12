@@ -96,11 +96,11 @@ private:
     rcl_interfaces::msg::SetParametersResult parametersCallback(const std::vector<rclcpp::Parameter> &parameters);
 
     // List of 2D centroids
-    mutable std::vector<Eigen::Vector2d> measurements_;
+    mutable Eigen::Array<double, 2, Eigen::Dynamic> measurements_;
 
-    std::vector<float> centroid_z_meas_;
+    mutable std::vector<float> centroid_z_meas_;
 
-    std::vector<std::vector<Eigen::Vector3f>> clusters_;
+    mutable std::vector<std::vector<Eigen::Vector3f>> clusters_;
 
     // Track manager
     TrackManager track_manager_;

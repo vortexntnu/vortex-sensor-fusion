@@ -1,6 +1,6 @@
 target_tracking_node:
   ros__parameters:
-    topic_pointcloud_in: "pcl/clusters"
+    topic_pointcloud_in: "vortex/clusters"
     topic_landmarks_out: "target_tracking/landmarks"
     topic_visualization_parameters: "target_tracking/parameters"
     clutter_rate: 0.001
@@ -9,10 +9,11 @@ target_tracking_node:
     gate_threshold: 2.5
     min_gate_threshold: 1.0
     max_gate_threshold: 10.0
-    confirmation_threshold: 0.9
+    confirmation_threshold: 0.1
     deletion_threshold: 0.2
+    initial_existence_probability: 0.4
     std_velocity: 0.2
     std_sensor: 0.5
-    update_interval_ms: 500
-    world_frame: "world_frame"
+    update_interval_ms: 100
+    fixed_frame: "world"
     publish_visualization: true

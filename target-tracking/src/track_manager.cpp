@@ -5,7 +5,7 @@ TrackManager::TrackManager()
 {
 }
 
-void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements,
+void TrackManager::updateTracks(Eigen::Array<double, 2, Eigen::Dynamic> measurements_,
     std::vector<float> centroid_z_meas_,
     std::vector<std::vector<Eigen::Vector3f>> clusters_,
     int update_interval, 
@@ -15,72 +15,106 @@ void TrackManager::updateTracks(std::vector<Eigen::Vector2d> measurements,
     double max_gate_threshold, 
     double prob_of_detection, 
     double prob_of_survival, 
-    double clutter_intensity)
+    double clutter_intensity,
+    double initial_existence_probability)
 {
     // Sorts the tracks based on existence probability and confirmed track
     std::sort(tracks_.begin(), tracks_.end());
-    std::cout << "tracks size: " << tracks_.size() << std::endl;
     
     for (auto &track : tracks_)
     {
         IPDA::Config config;
-        config.mahalanobis_threshold = gate_theshhold;
-        config.min_gate_threshold = min_gate_threshold;
-        config.max_gate_threshold = max_gate_threshold;
-        config.prob_of_detection = prob_of_detection;
-        config.clutter_intensity = clutter_intensity;
-        config.prob_of_survival = prob_of_survival;
+        config.pdaf.mahalanobis_threshold = gate_theshhold;
+        config.pdaf.min_gate_threshold = min_gate_threshold;
+        config.pdaf.max_gate_threshold = max_gate_threshold;
+        config.pdaf.prob_of_detection = prob_of_detection;
+        config.pdaf.clutter_intensity = clutter_intensity;
+        config.ipda.prob_of_survival = prob_of_survival;
 
-        
+        IPDA::State state_est_prev;
+        state_est_prev.x_estimate = track.state;
+        state_est_prev.existence_probability = track.existence_probability;
+        std::cout << "Prev existence probability: " << state_est_prev.existence_probability << std::endl;
         // Predict next state
-        auto [x_final, existence_probability, inside, outside, x_pred, z_pred, x_updated] = 
+        auto output = 
             IPDA::step(*dyn_model_, 
             *sensor_model_,
             update_interval / 1000.0,
-            track.state, 
-            measurements, 
-            track.existence_probability, 
+            state_est_prev, 
+            measurements_, 
             config);
-
         // Update state
-        track.state = x_final;
-
+        track.state = output.state.x_estimate;
+        std::cout << "Post existence probability: " << output.state.existence_probability << std::endl;
         // Update existence probability
-        track.existence_probability = existence_probability;
+        track.existence_probability = output.state.existence_probability;
 
         // Update track existence
-        if (track.confirmed == false && existence_probability > confirmation_threshold)
+        if (track.confirmed == false && output.state.existence_probability > confirmation_threshold)
         {
             track.confirmed = true;
+            track.action = LandmarkAction::ADD_ACTION;
+        }
+        else if (track.confirmed == true)
+        {
+            track.action = LandmarkAction::UPDATE_ACTION;
         }
 
+
         // Update the measurement list
-        measurements = outside;
+        Eigen::Array<double, 2, Eigen::Dynamic> outside(2, measurements_.cols());
+        std::vector<std::vector<Eigen::Vector3f>> clusters;
+        std::vector<float> centroid_z_meas;
+        float z_centroid_meas;
+        Eigen::Index inside_num = 0;
+        for (Eigen::Index i = 0; i < measurements_.cols(); ++i)
+        {
+            if (output.gated_measurements[i])
+            {
+                track.cluster.insert(track.cluster.end(), clusters_[i].begin(), clusters_[i].end());
 
+                z_centroid_meas += centroid_z_meas_[i];
+                inside_num++;
+            }
+            else
+            {
+                clusters.push_back(clusters_[i]);
+                outside.col(i-inside_num) = measurements_.col(i);
+                centroid_z_meas.push_back(centroid_z_meas_[i]);
+            }
+        }
+        outside.conservativeResize(2, measurements_.cols() - inside_num);
+        if(inside_num != 0)
+        {
+            track.centroid_z_measurement = z_centroid_meas / inside_num;
+            centroid_z_meas_ = centroid_z_meas;
+            clusters_ = clusters;
+            measurements_ = outside;
+        }
     }
-
     // Create new tracks based on the remaining measurements
-    createTracks(measurements);
+    createTracks(measurements_, centroid_z_meas_, clusters_, initial_existence_probability);
 }
 
-void TrackManager::createTracks(std::vector<Eigen::Vector2d> measurements)
+void TrackManager::createTracks(Eigen::Array<double, 2, Eigen::Dynamic> measurements, 
+    std::vector<float> centroid_z_meas, 
+    std::vector<std::vector<Eigen::Vector3f>> clusters, 
+    double initial_existence_probability)
 {
-    for (const auto &point : measurements)
+        
+    for (Eigen::Index i = 0; i < measurements.cols(); ++i)
     {
         Eigen::Vector4d state_estimate;
-        state_estimate << point, 0.0, 0.0;
+        state_estimate << measurements.col(i), 0.0, 0.0;
         Track track;
         track.id = tracker_id_;
         track.state = vortex::prob::Gauss4d(state_estimate, Eigen::Matrix4d::Identity());
-        track.existence_probability = 0.4;
+        track.existence_probability = initial_existence_probability;
         track.confirmed = false;
-
+        track.cluster.insert(track.cluster.end(), clusters[i].begin(), clusters[i].end());
+        track.centroid_z_measurement = centroid_z_meas[i];
         tracks_.push_back(track);
-
         tracker_id_++;
-
-        // remove the point from the list of measurements
-        measurements.erase(std::remove(measurements.begin(), measurements.end(), point), measurements.end());
     }
 }
 

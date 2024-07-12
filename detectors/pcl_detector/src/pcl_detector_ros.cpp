@@ -405,24 +405,35 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
 
     centroid_publisher_->publish(centroids_cloud_msg);
 
+    // vortex_msgs::msg::Clusters vortex_clusters;
+    // pcl::PointCloud<pcl::PointXYZ> convex_hull_pcl;
+    // vortex_clusters.centroids=centroids_cloud_msg;
+    // vortex_clusters.header = cloud_msg->header;
+    // for ( auto& cluster : clusters)
+    // {
+    //     pcl::PointCloud<pcl::PointXYZ>::Ptr cluster_convex_hull (new pcl::PointCloud<pcl::PointXYZ>);
+    //     processor_->compute_convex_hull(cluster, cluster_convex_hull);
+    //     sensor_msgs::msg::PointCloud2 convex_hull_msg;
+    //      pcl::toROSMsg(*cluster_convex_hull, convex_hull_msg);
+    //     //  RCLCPP_DEBUG_STREAM(this->get_logger(), "Point diff between concave hull and cluster: " << cluster.size() - cluster_convex_hull->size());
+    //     vortex_clusters.clusters.push_back(convex_hull_msg);
+    //     convex_hull_pcl.points.insert(convex_hull_pcl.points.end(), cluster_convex_hull->points.begin(), cluster_convex_hull->points.end());
+    // }
+    
+    // sensor_msgs::msg::PointCloud2 convex_hull_msg;
+    // pcl::toROSMsg(convex_hull_pcl, convex_hull_msg);
+    // convex_hull_msg.header = cloud_msg->header;
+    // convex_hull_publisher_->publish(convex_hull_msg);
+
     vortex_msgs::msg::Clusters vortex_clusters;
-    pcl::PointCloud<pcl::PointXYZ> concave_hull_pcl;
-    vortex_clusters.centroids=centroids_cloud_msg;
     vortex_clusters.header = cloud_msg->header;
-    for ( auto& cluster : clusters)
+    vortex_clusters.centroids = centroids_cloud_msg;
+    for (const auto& cluster : clusters)
     {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cluster_convex_hull (new pcl::PointCloud<pcl::PointXYZ>);
-        processor_->compute_convex_hull(cluster, cluster_convex_hull);
-        sensor_msgs::msg::PointCloud2 convex_hull_msg;
-         pcl::toROSMsg(*cluster_convex_hull, convex_hull_msg);
-        //  RCLCPP_DEBUG_STREAM(this->get_logger(), "Point diff between concave hull and cluster: " << cluster.size() - cluster_convex_hull->size());
-        vortex_clusters.clusters.push_back(convex_hull_msg);
-        concave_hull_pcl.points.insert(concave_hull_pcl.points.end(), cluster_convex_hull->points.begin(), cluster_convex_hull->points.end());
+        sensor_msgs::msg::PointCloud2 cluster_msg;
+        pcl::toROSMsg(cluster, cluster_msg);
+        vortex_clusters.clusters.push_back(cluster_msg);
     }
-    sensor_msgs::msg::PointCloud2 convex_hull_msg;
-    pcl::toROSMsg(concave_hull_pcl, convex_hull_msg);
-    convex_hull_msg.header = cloud_msg->header;
-    convex_hull_publisher_->publish(convex_hull_msg);
 
     vortex_cluster_publisher_->publish(vortex_clusters);
     auto end_time = std::chrono::high_resolution_clock::now();
