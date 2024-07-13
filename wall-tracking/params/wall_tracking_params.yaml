@@ -1,8 +1,7 @@
-target_tracking_node:
+wall_tracking_node:
   ros__parameters:
-    topic_pointcloud_in: "vortex/clusters"
+    topic_measurements_in: "wall_poses"
     topic_landmarks_out: "target_tracking/landmarks"
-    topic_visualization_parameters: "target_tracking/parameters"
     clutter_rate: 0.001
     probability_of_detection: 0.7
     probability_of_survival: 0.99
@@ -12,8 +11,7 @@ target_tracking_node:
     confirmation_threshold: 0.1
     deletion_threshold: 0.2
     initial_existence_probability: 0.4
-    std_velocity: 0.2
+    std_position: 0.2
     std_sensor: 0.5
     update_interval_ms: 100
     fixed_frame: "map"
-    publish_visualization: true

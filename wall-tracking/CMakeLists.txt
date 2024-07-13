@@ -1,0 +1,64 @@
+cmake_minimum_required(VERSION 3.5)
+project(wall_tracking)
+
+# Default to C99
+if(NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 99)
+endif()
+
+# Default to C++20
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 20)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(Eigen3 3.4.0 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(vortex_filtering REQUIRED)
+find_package(vortex_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+
+include_directories(include)
+
+
+add_executable(${PROJECT_NAME}_node 
+  src/wall_tracking_ros_node.cpp 
+  src/wall_tracking_ros.cpp 
+  src/wall_manager.cpp
+)
+
+target_link_libraries( ${PROJECT_NAME}_node
+  pcl_common
+  Eigen3::Eigen
+  ${PCL_LIBRARIES}
+)
+
+ament_target_dependencies(${PROJECT_NAME}_node
+  rclcpp 
+  std_msgs 
+  tf2_ros
+  tf2_geometry_msgs
+  vortex_filtering
+  vortex_msgs
+  geometry_msgs
+)
+
+install(TARGETS ${PROJECT_NAME}_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  launch
+  params
+  DESTINATION share/${PROJECT_NAME}/
+)
+
+ament_package()

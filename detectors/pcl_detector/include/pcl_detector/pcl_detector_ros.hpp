@@ -95,7 +95,11 @@ class PclDetectorNode : public rclcpp::Node
     // ROS2 subscriber and related topic name
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr subscription_;
     rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr poly_sub_;
+
     std::string param_topic_pointcloud_in_;
+    std::string param_topic_landmask_in_;
+    std::string param_topic_walls_out_;
+    std::string param_topic_clusters_out_;
     
     // ROS2 publisher and related topic name 
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr centroid_publisher_;
@@ -107,8 +111,6 @@ class PclDetectorNode : public rclcpp::Node
     rclcpp::Publisher<vortex_msgs::msg::Clusters>::SharedPtr vortex_cluster_publisher_;
 
 
-
-    std::string param_topic_pointcloud_out_;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr line_publisher;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr tf_line_publisher;

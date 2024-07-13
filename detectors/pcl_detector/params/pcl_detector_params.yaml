@@ -1,5 +1,10 @@
 pcl_detector_node:
   ros__parameters:
+    topic_pointcloud_in: "ouster/points"
+    topic_landmask_in: "landmask"
+    topic_walls_out: "wall_poses"
+    topic_clusters_out: "vortex/clusters"
+
     processor:
       voxel_leaf_size: 0.25 # Voxel grid leaf size
       model_thresh: 0.5   # Threshold for MSAC model
@@ -17,7 +22,7 @@ pcl_detector_node:
     transform_timeout_nsec: 50000000
     prev_line_min_inliers: 50
     new_lines: 1  # Number of new lines to find for new callback
-    fixed_frame: "world_frame"
+    fixed_frame: "map"
     
 
     detector: "dbscan" # one of "dbscan", "euclidean"

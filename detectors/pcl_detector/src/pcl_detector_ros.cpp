@@ -15,7 +15,10 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
 {
   // Configure default topics for subscribing/publishing
   declare_parameter<std::string>("topic_pointcloud_in", "ouster/points");
-  declare_parameter<std::string>("topic_pointcloud_out", "lidar/centroids");
+  declare_parameter<std::string>("topic_landmask_in", "landmask");
+  declare_parameter<std::string>("topic_walls_out", "wall_poses");
+  declare_parameter<std::string>("topic_clusters_out", "vortex/clusters");
+  
 
   // Read parameters from YAML file or set default values
   declare_parameter<std::string>("detector", "euclidean");
@@ -45,7 +48,9 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
 
 
   param_topic_pointcloud_in_ = get_parameter("topic_pointcloud_in").as_string();
-  param_topic_pointcloud_out_ = get_parameter("topic_pointcloud_out").as_string();
+  param_topic_landmask_in_ = get_parameter("topic_landmask_in").as_string();
+  param_topic_walls_out_ = get_parameter("topic_walls_out").as_string();
+  param_topic_clusters_out_ = get_parameter("topic_clusters_out").as_string();
 
   // Define the quality of service profile for publisher and subscriber
   rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
@@ -56,23 +61,27 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   qos_profile_transient_local.durability = RMW_QOS_POLICY_DURABILITY_TRANSIENT_LOCAL;
   auto qos_transient_local = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_transient_local.history, 1), qos_profile_transient_local);
   
-  centroid_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(param_topic_pointcloud_out_, qos);
+  subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
+    param_topic_pointcloud_in_, qos, std::bind(&PclDetectorNode::topic_callback, this, _1));
+  poly_sub_ = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
+    param_topic_landmask_in_, qos_transient_local, std::bind(&PclDetectorNode::land_poly_callback, this, _1));
+
+  vortex_cluster_publisher_ = this->create_publisher<vortex_msgs::msg::Clusters>(param_topic_clusters_out_, qos);
+  pose_array_publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>(param_topic_walls_out_, qos);
+
+  // Rest of publishers are for debugging/testing
+  centroid_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/centroids", qos);
   poly_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/land_poly", qos);
   pre_wall_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/pre_wall", qos);
   after_wall_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/after_wall", qos);
   cluster_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/clusters", qos);
   convex_hull_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/concave_hulls", qos);
-  vortex_cluster_publisher_ = this->create_publisher<vortex_msgs::msg::Clusters>("vortex/clusters", qos);
-  subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-  param_topic_pointcloud_in_, qos, std::bind(&PclDetectorNode::topic_callback, this, _1));
-  pose_array_publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>("wall_poses", qos);
   line_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("line_marker_array", qos);
   tf_line_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("tf_line_marker_array", qos);
 
   wall_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("wall_marker_array", qos);
   wall_cone_publisher = this->create_publisher<visualization_msgs::msg::MarkerArray>("wall_marker_cone", qos);
 
-  poly_sub_ = this->create_subscription<geometry_msgs::msg::PolygonStamped>("landmask", qos_transient_local, std::bind(&PclDetectorNode::land_poly_callback, this, _1));
 
   // Define a handle for validating parameters during runtime  
   on_set_callback_handle_ = add_on_set_parameters_callback(std::bind(&PclDetectorNode::parameter_callback, this, std::placeholders::_1));
