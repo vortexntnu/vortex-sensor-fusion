@@ -14,8 +14,7 @@ void WallManager::updateWalls(Eigen::Array<double, 4, Eigen::Dynamic> measuremen
     double prob_of_detection, 
     double prob_of_survival, 
     double clutter_intensity,
-    double initial_existence_probability,
-    double deletion_threshold)
+    double initial_existence_probability)
 {
     // Sorts the tracks based on existence probability and confirmed wall
     std::sort(walls_.begin(), walls_.end());
@@ -47,14 +46,10 @@ void WallManager::updateWalls(Eigen::Array<double, 4, Eigen::Dynamic> measuremen
         wall.existence_probability = output.state.existence_probability;
 
         // Update wall existence
-        if (wall.confirmed == false && wall.existence_probability > confirmation_threshold)
+        if (wall.confirmed == false && output.state.existence_probability > confirmation_threshold)
         {
             wall.confirmed = true;
             wall.action = LandmarkAction::ADD_ACTION;
-        }
-        else if (wall.confirmed == true && wall.existence_probability < deletion_threshold)
-        {
-            wall.action = LandmarkAction::REMOVE_ACTION;
         }
         else if (wall.confirmed == true)
         {

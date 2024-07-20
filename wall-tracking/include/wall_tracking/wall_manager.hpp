@@ -59,7 +59,7 @@ public:
      * @param prob_of_survival The probability of survival.
      * @param clutter_intensity The intensity of clutter.
      */
-    void updateWalls(Eigen::Array<double, 4, Eigen::Dynamic> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double min_gate_threshold, double max_gate_threshold, double prob_of_detection, double prob_of_survival, double clutter_intensity, double initial_existence_probability, double deletion_threshold);
+    void updateWalls(Eigen::Array<double, 4, Eigen::Dynamic> measurements_, int update_interval, double confirmation_threshold, double gate_theshhold, double min_gate_threshold, double max_gate_threshold, double prob_of_detection, double prob_of_survival, double clutter_intensity, double initial_existence_probability);
 
     /**
      * @brief Creates new tracks for every measurements.
