@@ -48,7 +48,7 @@ private:
      * 
      * @param deletion_threshold The deletion threshold for the landmarks.
      */
-    void publish_landmarks();
+    void publish_landmarks(double deletion_threshold);
 
     /**
      * @brief Updates the dynamic model with the given velocity standard deviation.

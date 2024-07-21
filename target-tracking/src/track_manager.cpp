@@ -34,7 +34,6 @@ void TrackManager::updateTracks(Eigen::Array<double, 2, Eigen::Dynamic> measurem
         IPDA::State state_est_prev;
         state_est_prev.x_estimate = track.state;
         state_est_prev.existence_probability = track.existence_probability;
-        std::cout << "Prev existence probability: " << state_est_prev.existence_probability << std::endl;
         // Predict next state
         auto output = 
             IPDA::step(*dyn_model_, 
@@ -45,7 +44,6 @@ void TrackManager::updateTracks(Eigen::Array<double, 2, Eigen::Dynamic> measurem
             config);
         // Update state
         track.state = output.state.x_estimate;
-        std::cout << "Post existence probability: " << output.state.existence_probability << std::endl;
         // Update existence probability
         track.existence_probability = output.state.existence_probability;
 
@@ -60,7 +58,8 @@ void TrackManager::updateTracks(Eigen::Array<double, 2, Eigen::Dynamic> measurem
             track.action = LandmarkAction::UPDATE_ACTION;
         }
 
-
+        // Update the cluster. If none of the measurements are gated, safer to clear the cluster than use previous
+        track.cluster.clear();
         // Update the measurement list
         Eigen::Array<double, 2, Eigen::Dynamic> outside(2, measurements_.cols());
         std::vector<std::vector<Eigen::Vector3f>> clusters;

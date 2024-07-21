@@ -72,7 +72,6 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
 void TargetTrackingNode::topic_callback(const vortex_msgs::msg::Clusters::SharedPtr clusters)
 {
     // Transform the point cloud to the fixed frame
-    RCLCPP_INFO(this->get_logger(), "Received %lu clusters", clusters->clusters.size());
     try {
         // Get fixed_frame parameter
         std::string fixed_frame = get_parameter("fixed_frame").as_string();
@@ -202,15 +201,12 @@ void TargetTrackingNode::timer_callback()
 
 void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
     vortex_msgs::msg::LandmarkArray landmark_array;
-    RCLCPP_INFO(this->get_logger(), "Number of tracks: %lu", track_manager_.getTracks().size());
     for(const auto& track : track_manager_.getTracks())
     {   
-        RCLCPP_INFO(this->get_logger(), "Track existence probability: %f", track.existence_probability);
         // Skips unconfirmed tracks
         if(track.confirmed == false){
             continue;
         }
-        RCLCPP_INFO(this->get_logger(), "Track id: %d", track.id);
         vortex_msgs::msg::Landmark landmark;
 
         // Sets landmark type
@@ -281,7 +277,6 @@ void TargetTrackingNode::publish_landmarks(double deletion_threshold) {
 
     landmark_publisher_->publish(landmark_array);
 
-    RCLCPP_INFO(this->get_logger(), "Published %lu tracks", landmark_array.landmarks.size());
 }
 
 void TargetTrackingNode::publish_visualization_parameters(double gate_threshold, double min_gate_threshold, double max_gate_threshold)

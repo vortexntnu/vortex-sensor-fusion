@@ -146,18 +146,18 @@ void WallTrackingNode::timer_callback()
 
 
     // Update tracks
-    wall_manager_.updateWalls(measurements_, update_interval, confirmation_threshold, gate_threshold, min_gate_threshold, max_gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity, initial_existence_probability, deletion_threshold);
+    wall_manager_.updateWalls(measurements_, update_interval, confirmation_threshold, gate_threshold, min_gate_threshold, max_gate_threshold, prob_of_detection, prob_of_survival,clutter_intensity, initial_existence_probability);
 
     measurements_.resize(4, 0);
 
     // Publish tracks to landmark server
-    publish_landmarks();
+    publish_landmarks(deletion_threshold);
 
     // delete tracks
     wall_manager_.deleteWalls(deletion_threshold);
 }
 
-void WallTrackingNode::publish_landmarks() {
+void WallTrackingNode::publish_landmarks(double deletion_threshold) {
     vortex_msgs::msg::LandmarkArray landmark_array;
     for(const auto& track : wall_manager_.getWalls())
     {   
@@ -175,7 +175,7 @@ void WallTrackingNode::publish_landmarks() {
 
         // creates landmark message
         landmark.id = track.id;
-        landmark.action = track.action;
+        landmark.action = track.existence_probability < deletion_threshold ? 0 : track.action;
         landmark.odom.header.frame_id = get_parameter("fixed_frame").as_string();
         landmark.odom.header.stamp = this->get_clock()->now();
 
@@ -223,7 +223,6 @@ void WallTrackingNode::publish_landmarks() {
 
     landmark_publisher_->publish(landmark_array);
 
-    RCLCPP_INFO(this->get_logger(), "Published %lu tracks", landmark_array.landmarks.size());
 }
 
 void WallTrackingNode::update_timer(int update_interval)
