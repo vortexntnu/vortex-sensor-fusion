@@ -37,17 +37,17 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
 # Check if CUDA language is available and enable it
-include(CheckLanguage)
-check_language(CUDA)
+# include(CheckLanguage)
+# check_language(CUDA)
 
-if(CMAKE_CUDA_COMPILER)
-  enable_language(CUDA)
-  # Ensure CUDA is enabled and set correctly
-  set(CMAKE_CUDA_STANDARD 17)
-  set(CMAKE_CUDA_STANDARD_REQUIRED ON)
-  find_package(CUDAToolkit REQUIRED)
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -std=c++17")
-endif()
+# if(CMAKE_CUDA_COMPILER)
+#   enable_language(CUDA)
+#   # Ensure CUDA is enabled and set correctly
+#   set(CMAKE_CUDA_STANDARD 17)
+#   set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+#   find_package(CUDAToolkit REQUIRED)
+#   set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -std=c++17")
+# endif()
 
 add_executable(${PROJECT_NAME}_node 
   src/pcl_detector_ros_node.cpp 
@@ -73,22 +73,22 @@ target_include_directories(${PROJECT_NAME}_node PUBLIC
 # Target compile features
 target_compile_features(${PROJECT_NAME}_node PUBLIC c_std_99 cxx_std_17)
 
-if(CMAKE_CUDA_COMPILER)
-  set_source_files_properties(src/pcl_gpu_processor.cu PROPERTIES LANGUAGE CUDA)
-  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/pcl_gpu_processor.cu")
-    target_sources(${PROJECT_NAME}_node PRIVATE src/pcl_gpu_processor.cu)
-    target_link_libraries(${PROJECT_NAME}_node CUDA::cudart)
-    target_compile_definitions(${PROJECT_NAME}_node PRIVATE USE_CUDA)
-  else()
-    message(FATAL_ERROR "CUDA is found but src/pcl_gpu_processor.cu does not exist.")
-  endif()
+# if(CMAKE_CUDA_COMPILER)
+#   set_source_files_properties(src/pcl_gpu_processor.cu PROPERTIES LANGUAGE CUDA)
+#   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/pcl_gpu_processor.cu")
+#     target_sources(${PROJECT_NAME}_node PRIVATE src/pcl_gpu_processor.cu)
+#     target_link_libraries(${PROJECT_NAME}_node CUDA::cudart)
+#     target_compile_definitions(${PROJECT_NAME}_node PRIVATE USE_CUDA)
+#   else()
+#     message(FATAL_ERROR "CUDA is found but src/pcl_gpu_processor.cu does not exist.")
+#   endif()
+# else()
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/pcl_cpu_processor.cpp")
+  target_sources(${PROJECT_NAME}_node PRIVATE src/pcl_cpu_processor.cpp)
 else()
-  if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/pcl_cpu_processor.cpp")
-    target_sources(${PROJECT_NAME}_node PRIVATE src/pcl_cpu_processor.cpp)
-  else()
-    message(FATAL_ERROR "CUDA is not found and src/pcl_cpu_processor.cpp does not exist.")
-  endif()
+  message(FATAL_ERROR "CUDA is not found and src/pcl_cpu_processor.cpp does not exist.")
 endif()
+# endif()
 
 target_link_libraries(${PROJECT_NAME}_node
   pcl_common

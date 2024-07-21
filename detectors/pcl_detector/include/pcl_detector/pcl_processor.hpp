@@ -59,7 +59,7 @@ public:
     void apply_landmask(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, int nvert, float* vertx, float* verty);
     int pnpoly(int nvert, float *vertx, float *verty, float testx, float testy);
 
-    void compute_convex_hull(const pcl::PointCloud<pcl::PointXYZ>& cluster, pcl::PointCloud<pcl::PointXYZ>::Ptr& hull);
+    // void compute_convex_hull(const pcl::PointCloud<pcl::PointXYZ>& cluster, pcl::PointCloud<pcl::PointXYZ>::Ptr& hull);
 
 
 

@@ -4,7 +4,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/filter.h>
 #include <pcl/filters/extract_indices.h>
-#include <pcl/surface/convex_hull.h>
+// #include <pcl/surface/convex_hull.h>
 
 #include <pcl_detector/sample_consensus/msac.h>
 #include <pcl_detector/sample_consensus/sac_model_line_2d.hpp>
@@ -256,7 +256,7 @@ std::pair<float,float> PclProcessor::create_extended_point(const pcl::PointXYZ& 
         float e_x = (p.x / p_magnitude) * length;
         float e_y = (p.y / p_magnitude) * length;
 
-        return {e_x, e_y};
+        return std::make_pair(e_x, e_y);
 }
 
 int PclProcessor::pnpoly(int nvert, float *vertx, float *verty, float testx, float testy)
@@ -383,12 +383,12 @@ void PclProcessor::extract_points(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, std
     indices_to_remove.clear();
 }
 
-void PclProcessor::compute_convex_hull(const pcl::PointCloud<pcl::PointXYZ>& cluster, pcl::PointCloud<pcl::PointXYZ>::Ptr& hull)
-{
-    pcl::ConvexHull<pcl::PointXYZ> chull;
-    chull.setDimension(2);
-    chull.setInputCloud(cluster.makeShared());
-    chull.reconstruct(*hull);
-}
+// void PclProcessor::compute_convex_hull(const pcl::PointCloud<pcl::PointXYZ>& cluster, pcl::PointCloud<pcl::PointXYZ>::Ptr& hull)
+// {
+//     pcl::ConvexHull<pcl::PointXYZ> chull;
+//     chull.setDimension(2);
+//     chull.setInputCloud(cluster.makeShared());
+//     chull.reconstruct(*hull);
+// }
 
 }; // namespace pcl_detector
