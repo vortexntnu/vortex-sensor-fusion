@@ -8,7 +8,7 @@ wall_tracking_node:
     gate_threshold: 2.5
     min_gate_threshold: 1.0
     max_gate_threshold: 10.0
-    confirmation_threshold: 0.1
+    confirmation_threshold: 0.6
     deletion_threshold: 0.2
     initial_existence_probability: 0.4
     std_position: 0.2

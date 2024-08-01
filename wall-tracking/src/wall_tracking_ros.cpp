@@ -30,20 +30,28 @@ WallTrackingNode::WallTrackingNode(const rclcpp::NodeOptions& options)
     parameter_subscriber_ = add_on_set_parameters_callback(std::bind(&WallTrackingNode::parametersCallback, this, std::placeholders::_1));
 
     // Read parameters for subscriber and publisher
-    param_topic_measurements_in_ = get_parameter("topic_walls_in").as_string();
+    param_topic_measurements_in_ = get_parameter("topic_measurements_in").as_string();
     param_topic_landmarks_out_ = get_parameter("topic_landmarks_out").as_string();
 
-    // Set QoS profile
-    rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
-    qos_profile.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
-    auto qos = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile.history, 1), qos_profile);
+    // Set reliable QoS profile for publisher
+    rmw_qos_profile_t qos_profile_pub = rmw_qos_profile_default;
+    qos_profile_pub.reliability = RMW_QOS_POLICY_RELIABILITY_RELIABLE;
+    qos_profile_pub.history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
+    qos_profile_pub.depth = 10; // You can adjust this depth as needed for your use case
+
+    auto qos_pub = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_pub.history, qos_profile_pub.depth), qos_profile_pub);
+
+    // Set best effort QoS profile for subscriber
+    rmw_qos_profile_t qos_profile_sub = rmw_qos_profile_sensor_data;
+    qos_profile_sub.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
+    auto qos_sub = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_sub.history, 1), qos_profile_sub);
 
     // Subscribe to topic
     subscriber_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
-        param_topic_measurements_in_, qos, std::bind(&WallTrackingNode::topic_callback, this, _1));
+        param_topic_measurements_in_, qos_sub, std::bind(&WallTrackingNode::topic_callback, this, _1));
 
     // Publish landmarks
-    landmark_publisher_ = this->create_publisher<vortex_msgs::msg::LandmarkArray>(param_topic_landmarks_out_, qos);
+    landmark_publisher_ = this->create_publisher<vortex_msgs::msg::LandmarkArray>(param_topic_landmarks_out_, qos_pub);
 
     // Set timer
     int update_interval = get_parameter("update_interval_ms").as_int();
