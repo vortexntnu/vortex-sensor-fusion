@@ -116,6 +116,7 @@ private:
     // Visualization publisher
     rclcpp::Publisher<vortex_msgs::msg::ParameterArray>::SharedPtr visualization_publisher_;
     std::string param_topic_visualization_out_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr visualization_cloud_publisher_;
 
     rclcpp::TimerBase::SharedPtr timer_;
 

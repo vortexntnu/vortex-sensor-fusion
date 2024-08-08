@@ -80,7 +80,7 @@ void WallTrackingNode::topic_callback(const geometry_msgs::msg::PoseArray::Share
 
         // Lookup the transformation
         geometry_msgs::msg::TransformStamped transform_stamped = 
-        tf_buffer_->lookupTransform(fixed_frame, wall_poses->header.frame_id, wall_poses->header.stamp, rclcpp::Duration(1, 0));
+        tf_buffer_->lookupTransform(fixed_frame, wall_poses->header.frame_id, tf2::TimePointZero);
 
         // Clear measurements
         measurements_= Eigen::Array<double, 4, Eigen::Dynamic>(4, wall_poses->poses.size()/2);

@@ -7,10 +7,10 @@
 #include <wall_tracking/wall_model.hpp>
 
 using State4d = vortex::prob::Gauss4d;
-using DynMod = vortex::models::Wall;
+using DynWallMod = vortex::models::Wall;
 
 using SensorMod = vortex::models::IdentitySensorModel<4, 4>;
-using IPDA = vortex::filter::IPDA<DynMod, SensorMod>;
+using IPDA = vortex::filter::IPDA<DynWallMod, SensorMod>;
 
 enum LandmarkAction {
     REMOVE_ACTION = 0,
@@ -99,7 +99,7 @@ public:
 private:
     std::vector<Wall> walls_; ///< The vector of tracks.
 
-    std::shared_ptr<DynMod> dyn_model_; ///< The dynamic model for estimating target motion.
+    std::shared_ptr<DynWallMod> dyn_model_; ///< The dynamic model for estimating target motion.
 
     std::shared_ptr<SensorMod> sensor_model_; ///< The sensor model for estimating target measurements.
 

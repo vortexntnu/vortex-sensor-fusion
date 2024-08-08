@@ -20,7 +20,7 @@ void TrackManager::updateTracks(Eigen::Array<double, 2, Eigen::Dynamic> measurem
 {
     // Sorts the tracks based on existence probability and confirmed track
     std::sort(tracks_.begin(), tracks_.end());
-    
+
     for (auto &track : tracks_)
     {
         IPDA::Config config;
@@ -30,6 +30,8 @@ void TrackManager::updateTracks(Eigen::Array<double, 2, Eigen::Dynamic> measurem
         config.pdaf.prob_of_detection = prob_of_detection;
         config.pdaf.clutter_intensity = clutter_intensity;
         config.ipda.prob_of_survival = prob_of_survival;
+        config.ipda.estimate_clutter = false;
+        config.pdaf.clutter_intensity = clutter_intensity;
 
         IPDA::State state_est_prev;
         state_est_prev.x_estimate = track.state;

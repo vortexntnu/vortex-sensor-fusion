@@ -220,7 +220,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     RCLCPP_DEBUG_STREAM(this->get_logger(), "Number of points after removing zero points: " << cloud->size());
     
     // Used to remove ground points from testing on land
-    processor_->applyPassThrough(cloud, "z", -0.6, 100.0);
+    // processor_->applyPassThrough(cloud, "z", -0.6, 100.0);
 
     if(this->get_parameter("apply_landmask").as_bool() && land_mask_set_)
     {
@@ -228,8 +228,7 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
         try
         {
             geometry_msgs::msg::TransformStamped transform_stamped = tf_buffer_->
-            lookupTransform(land_mask_.header.frame_id, cloud_msg->header.frame_id, cloud_msg->header.stamp, 
-            rclcpp::Duration(0, this->get_parameter("transform_timeout_nsec").as_int()));
+            lookupTransform(cloud_msg->header.frame_id, land_mask_.header.frame_id, tf2::TimePointZero);
 
             tf2::doTransform(land_mask_, land_mask_tf, transform_stamped);
             RCLCPP_DEBUG_STREAM_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
@@ -246,6 +245,11 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
 
             processor_->apply_landmask(cloud, nvert, vertx.data(), verty.data());
 
+            if(cloud->size() == 0)
+            {
+                RCLCPP_WARN(this->get_logger(), "No points left after applying landmask");
+                return;
+            }
             RCLCPP_DEBUG_STREAM(this->get_logger(), "Number of points after applying landmask: " << cloud->size());
 
             pcl::PointCloud<pcl::PointXYZ> land_mask_cloud_tf;
@@ -386,6 +390,10 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
     downsampled_cloud_msg.header = cloud_msg->header;
 
     after_wall_pub_->publish(downsampled_cloud_msg);
+    for (auto& point : cloud->points)
+    {
+        point.z = 0.0;
+    }
 
     // Finds clusters with the configured detector
     // pcl::PointCloud<pcl::PointXYZ> detections = detector_->get_detections(*cloud);

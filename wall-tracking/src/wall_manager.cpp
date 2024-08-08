@@ -106,7 +106,7 @@ void WallManager::deleteWalls(double deletion_threshold)
 
 void WallManager::set_dyn_model(double std_velocity)
 {
-    dyn_model_ = std::make_shared<DynMod>(std_velocity);
+    dyn_model_ = std::make_shared<DynWallMod>(std_velocity);
 }
 
 void WallManager::set_sensor_model(double std_measurement)

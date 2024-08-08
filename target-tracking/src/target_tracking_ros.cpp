@@ -49,6 +49,8 @@ TargetTrackingNode::TargetTrackingNode(const rclcpp::NodeOptions& options)
     qos_profile_sub.reliability = RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT;
     auto qos_sub = rclcpp::QoS(rclcpp::QoSInitialization(qos_profile_sub.history, 1), qos_profile_sub);
 
+    visualization_cloud_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("target_tracking/visualization", qos_sub);
+
     // Subscribe to topic
     subscriber_ = this->create_subscription<vortex_msgs::msg::Clusters>(
         param_topic_pointcloud_in_, qos_sub, std::bind(&TargetTrackingNode::topic_callback, this, _1));
@@ -85,13 +87,13 @@ void TargetTrackingNode::topic_callback(const vortex_msgs::msg::Clusters::Shared
 
         // Lookup the transformation
         geometry_msgs::msg::TransformStamped transform_stamped = 
-        tf_buffer_->lookupTransform(fixed_frame, clusters->header.frame_id, clusters->header.stamp, rclcpp::Duration(1, 0));
+        tf_buffer_->lookupTransform(fixed_frame, clusters->header.frame_id, tf2::TimePointZero);
 
         // Clear measurements
         centroid_z_meas_.clear();
         clusters_.clear();
-        measurements_= Eigen::Array<double, 2, Eigen::Dynamic>(2, 0);
-        Eigen::Index size = 0;
+        Eigen::Index size = clusters->clusters.size();
+        measurements_= Eigen::Array<double, 2, Eigen::Dynamic>(2, size);
         
         for (const auto& cluster : clusters->clusters)
         {
@@ -112,10 +114,8 @@ void TargetTrackingNode::topic_callback(const vortex_msgs::msg::Clusters::Shared
                 point_3d[2] = transformed_point.z;
                 cluster_points.push_back(point_3d);
             }
-            size++;
             clusters_.push_back(cluster_points);
         }
-        measurements_.resize(2, size);
 
         // Transform PointCloud to vector of 2d points
         sensor_msgs::PointCloud2ConstIterator<float> iter_x(clusters->centroids, "x");
@@ -144,6 +144,22 @@ void TargetTrackingNode::topic_callback(const vortex_msgs::msg::Clusters::Shared
     } catch (tf2::TransformException &ex) {
         RCLCPP_WARN(this->get_logger(), "Could not transform point cloud: %s", ex.what());
     }
+    sensor_msgs::msg::PointCloud2 cloud_msg;
+    pcl::PointCloud<pcl::PointXYZ> cloud_centroids;
+    for (Eigen::Index i = 0; i < measurements_.cols(); ++i)
+    {
+        pcl::PointXYZ point;
+        point.x = measurements_(0, i);
+        point.y = measurements_(1, i);
+        point.z = centroid_z_meas_[i];
+        cloud_centroids.push_back(point);
+    }
+    pcl::toROSMsg(cloud_centroids, cloud_msg);
+    cloud_msg.header.stamp = clusters->header.stamp;
+    cloud_msg.header.frame_id = get_parameter("fixed_frame").as_string();
+    visualization_cloud_publisher_->publish(cloud_msg);
+
+
 }
 
 

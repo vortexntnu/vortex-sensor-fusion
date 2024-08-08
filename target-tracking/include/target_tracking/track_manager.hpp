@@ -31,7 +31,7 @@ struct Track {
         if (confirmed != other.confirmed) {
             return confirmed > other.confirmed;
         } else {
-            return existence_probability < other.existence_probability;
+            return existence_probability > other.existence_probability;
         }
     }
 
