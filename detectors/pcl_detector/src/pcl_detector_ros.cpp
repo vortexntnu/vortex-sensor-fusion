@@ -40,6 +40,8 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   declare_parameter<bool>("apply_voxelgrid", false);
   declare_parameter<bool>("map_to_grid", false);
   declare_parameter<int>("cell_inc_value", 5);
+  declare_parameter<int>("const_cell_value", 100.0);
+  declare_parameter<bool>("const_grid_cell", true);
   declare_parameter<bool>("detect_lines", false);
   declare_parameter<std::string>("fixed_frame", "world_frame");
   declare_parameter<bool>("transform_lines", false);
@@ -556,6 +558,10 @@ nav_msgs::msg::OccupancyGrid PclDetectorNode::map_to_grid(const sensor_msgs::msg
     sensor_msgs::msg::PointCloud2 transformed_msg;
     tf2::doTransform(*msg, transformed_msg, transform_stamped);
 
+    int inc_value = this->get_parameter("cell_inc_value").as_int();
+    bool const_grid_cell = this->get_parameter("const_grid_cell").as_bool();
+    int const_cell_value = this->get_parameter("const_cell_value").as_double();
+
      // Iterate through the point cloud and fill the grid
     grid.data.resize(grid.info.width * grid.info.height, 0);
     for (sensor_msgs::PointCloud2ConstIterator<float> iter_x(transformed_msg, "x"), iter_y(transformed_msg, "y"); 
@@ -572,9 +578,10 @@ nav_msgs::msg::OccupancyGrid PclDetectorNode::map_to_grid(const sensor_msgs::msg
         // Ensure the point is within the grid bounds
         if (grid_x >= 0 && grid_x < static_cast<int>(grid.info.width) && grid_y >= 0 && grid_y < static_cast<int>(grid.info.height)) {
             int index = grid_y * grid.info.width + grid_x;
-            // Mark the cell as occupied (100)
-            if (grid.data[index] < std::numeric_limits<int8_t>::max() - this->get_parameter("cell_inc_value").as_int()) {
-            grid.data[index] += this->get_parameter("cell_inc_value").as_int();
+            if (const_grid_cell) {
+                grid.data[index] = const_cell_value;
+            } else if (grid.data[index] < std::numeric_limits<int8_t>::max() - inc_value) {
+            grid.data[index] += inc_value;
             }
         }
     }

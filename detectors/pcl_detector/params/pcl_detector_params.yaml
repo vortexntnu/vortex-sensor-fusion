@@ -19,6 +19,8 @@ pcl_detector_node:
     apply_voxelgrid: true
     map_to_grid: true
     cell_inc_value: 5
+    const_grid_cell: true # If true, occupied cell is set to 100, otherwise 0
+    const_cell_value: 100
     detect_lines: true
     transform_lines: false
     transform_timeout_nsec: 50000000
