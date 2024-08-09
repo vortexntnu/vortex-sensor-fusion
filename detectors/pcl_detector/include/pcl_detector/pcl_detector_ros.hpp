@@ -24,6 +24,7 @@
 #include <geometry_msgs/msg/pose_array.hpp>
 #include <geometry_msgs/msg/polygon_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
+#include "nav_msgs/srv/get_map.hpp"
 #include <vortex_msgs/msg/clusters.hpp>
 
 #include <visualization_msgs/msg/marker_array.hpp>
@@ -84,6 +85,9 @@ class PclDetectorNode : public rclcpp::Node
 
     void add_ros_wall_poses(const std::vector<std::pair<pcl::PointXYZ,pcl::PointXYZ>>& wall_poses);
 
+    nav_msgs::msg::OccupancyGrid map_to_grid(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
+
+    void get_grid();
 
     // visualization functions
     void publish_line_marker_array(const std::vector<Eigen::VectorXf>& lines, const std::string& frame_id);
@@ -110,7 +114,8 @@ class PclDetectorNode : public rclcpp::Node
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr convex_hull_publisher_;
     rclcpp::Publisher<vortex_msgs::msg::Clusters>::SharedPtr vortex_cluster_publisher_;
 
-
+    rclcpp::Client<nav_msgs::srv::GetMap>::SharedPtr grid_client_;
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr grid_publisher_;
 
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr line_publisher;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr tf_line_publisher;
@@ -134,6 +139,11 @@ class PclDetectorNode : public rclcpp::Node
     std::vector<Eigen::VectorXf> current_lines_;
     std::vector<Eigen::VectorXf> prev_lines_;
     geometry_msgs::msg::PoseArray ros_wall_poses_;
+
+    float resolution_;
+    uint32_t height_;
+    uint32_t width_;
+    bool grid_info_received_ = false;
 
     std::unordered_map<std::string, DetectorType> detector_type = {
         { "dbscan", DetectorType::DBSCAN },

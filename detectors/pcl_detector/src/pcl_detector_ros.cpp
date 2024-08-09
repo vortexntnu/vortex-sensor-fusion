@@ -1,6 +1,6 @@
 #include <pcl_detector/pcl_detector_ros.hpp>
 #include <visualization_msgs/msg/marker.hpp>
-
+#include <thread>
 #include <vector>
 #include <Eigen/Dense>
 #include <algorithm>
@@ -38,6 +38,8 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
 
   declare_parameter<bool>("apply_landmask", false);
   declare_parameter<bool>("apply_voxelgrid", false);
+  declare_parameter<bool>("map_to_grid", false);
+  declare_parameter<int>("cell_inc_value", 5);
   declare_parameter<bool>("detect_lines", false);
   declare_parameter<std::string>("fixed_frame", "world_frame");
   declare_parameter<bool>("transform_lines", false);
@@ -68,6 +70,7 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
 
   vortex_cluster_publisher_ = this->create_publisher<vortex_msgs::msg::Clusters>(param_topic_clusters_out_, qos);
   pose_array_publisher_ = this->create_publisher<geometry_msgs::msg::PoseArray>(param_topic_walls_out_, qos);
+  grid_publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>("pcl_grid", qos);
 
   // Rest of publishers are for debugging/testing
   centroid_publisher_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("pcl/centroids", qos);
@@ -105,6 +108,12 @@ PclDetectorNode::PclDetectorNode(const rclcpp::NodeOptions& options) : Node("pcl
   // Initialize transform listener
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+
+    if(this->get_parameter("map_to_grid").as_bool())
+    {
+    grid_client_ = create_client<nav_msgs::srv::GetMap>("get_map");
+    std::thread(&PclDetectorNode::get_grid, this).detach();
+    }
 }
 
 void PclDetectorNode::land_poly_callback(const geometry_msgs::msg::PolygonStamped::SharedPtr msg)
@@ -283,6 +292,14 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
         pre_wall_pub_->publish(land_inlier_cloud_msg);
     }
 
+
+    if (this->get_parameter("map_to_grid").as_bool())
+    {
+        if(grid_info_received_){
+            nav_msgs::msg::OccupancyGrid grid = map_to_grid(cloud_msg);
+            grid_publisher_->publish(grid);
+        }
+    }
     if (this->get_parameter("detect_lines").as_bool())
     {
 
@@ -457,6 +474,111 @@ void PclDetectorNode::topic_callback(const sensor_msgs::msg::PointCloud2::Shared
 
     std::chrono::duration<double> duration = end_time - start_time;
     RCLCPP_DEBUG_STREAM(this->get_logger(), "Processing time for topic_callback: " << duration.count() << " seconds");
+}
+
+void PclDetectorNode::get_grid() {
+  while (true) {
+    rclcpp::sleep_for(std::chrono::seconds(1));
+    if (!grid_client_->wait_for_service(std::chrono::seconds(5))) {
+      RCLCPP_ERROR(this->get_logger(), "Service not available after waiting");
+      continue;
+    }
+
+    auto request = std::make_shared<nav_msgs::srv::GetMap::Request>();
+    auto result_future = grid_client_->async_send_request(request);
+
+    // Wait for the result within a specified timeout period
+    auto status = result_future.wait_for(std::chrono::seconds(5));
+    if (status == std::future_status::ready) {
+      try {
+        auto result = result_future.get();
+        if (result->map.data.empty()) {
+          RCLCPP_ERROR(this->get_logger(),
+                       "Received empty map from grid client");
+          continue;
+        }
+        height_ = result->map.info.height;
+        width_ = result->map.info.width;
+        resolution_ = result->map.info.resolution;
+        grid_info_received_ = true;
+
+        RCLCPP_INFO(this->get_logger(),
+                    "Successfully received map from grid client");
+        return;
+      } catch (const std::exception &e) {
+        RCLCPP_ERROR(this->get_logger(),
+                     "Exception while getting result from future: %s",
+                     e.what());
+      }
+    } else {
+      RCLCPP_ERROR(this->get_logger(),
+                   "Failed to get map from grid client within timeout period");
+      continue;
+    }
+  }
+}
+
+nav_msgs::msg::OccupancyGrid PclDetectorNode::map_to_grid(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+{
+    nav_msgs::msg::OccupancyGrid grid;
+    grid.header.frame_id = this->get_parameter("fixed_frame").as_string();
+    grid.header.stamp = msg->header.stamp;
+    grid.info.resolution = resolution_;
+    grid.info.width = width_;
+    grid.info.height = height_;
+    double half_width_meters = -(width_ *
+                                resolution_) /
+                                2.0;
+    double half_height_meters = -(height_ *
+                                    resolution_) /
+                                2.0;
+    // auto [lat, lon] = flat2lla(half_width_meters, half_height_meters);
+    geometry_msgs::msg::Pose map_origin;
+    map_origin.position.x = half_width_meters;
+    map_origin.position.y = half_height_meters;
+    map_origin.position.z = 0.0;
+    map_origin.orientation.x = 0.0;
+    map_origin.orientation.y = 0.0;
+    map_origin.orientation.z = 0.0;
+    map_origin.orientation.w = 1.0;
+    grid.info.origin = map_origin;
+    geometry_msgs::msg::TransformStamped transform_stamped;
+    bool transform_success = false;
+    while (!transform_success) {
+        try {
+            transform_stamped = tf_buffer_->lookupTransform(grid.header.frame_id, msg->header.frame_id, tf2::TimePointZero);
+            transform_success = true;
+        } catch (tf2::TransformException &ex) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to lookup transform: %s", ex.what());
+            rclcpp::sleep_for(std::chrono::seconds(1));
+        }
+    }
+    sensor_msgs::msg::PointCloud2 transformed_msg;
+    tf2::doTransform(*msg, transformed_msg, transform_stamped);
+
+     // Iterate through the point cloud and fill the grid
+    grid.data.resize(grid.info.width * grid.info.height, 0);
+    for (sensor_msgs::PointCloud2ConstIterator<float> iter_x(transformed_msg, "x"), iter_y(transformed_msg, "y"); 
+         iter_x != iter_x.end(); ++iter_x, ++iter_y) {
+        
+        // Get the x and y coordinates of the point
+        float x = *iter_x;
+        float y = *iter_y;
+
+        // Calculate the grid cell index
+        int grid_x = static_cast<int>((x) / grid.info.resolution + grid.info.width / 2);
+        int grid_y = static_cast<int>((y) / grid.info.resolution + grid.info.height / 2);
+
+        // Ensure the point is within the grid bounds
+        if (grid_x >= 0 && grid_x < static_cast<int>(grid.info.width) && grid_y >= 0 && grid_y < static_cast<int>(grid.info.height)) {
+            int index = grid_y * grid.info.width + grid_x;
+            // Mark the cell as occupied (100)
+            if (grid.data[index] < std::numeric_limits<int8_t>::max() - this->get_parameter("cell_inc_value").as_int()) {
+            grid.data[index] += this->get_parameter("cell_inc_value").as_int();
+            }
+        }
+    }
+    return grid;
 }
 
 void PclDetectorNode::transform_lines(const std_msgs::msg::Header& cloud_header, std::vector<Eigen::VectorXf>& prev_lines)

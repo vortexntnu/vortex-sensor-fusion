@@ -15,8 +15,10 @@ pcl_detector_node:
       wall_min_points: 35  # Minimum number of points to consider a wall
       wall_min_length: 5.0  # Minimum length of wall
     
-    apply_landmask: true
+    apply_landmask: false
     apply_voxelgrid: true
+    map_to_grid: true
+    cell_inc_value: 5
     detect_lines: true
     transform_lines: false
     transform_timeout_nsec: 50000000
